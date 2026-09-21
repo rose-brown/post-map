@@ -2,6 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **이어서 작업한다면 `docs/HANDOFF.md` 를 먼저 읽어라.**
+> 현재 막혀 있는 지점(GitHub Pages 배포 마무리)과 직전 세션에서 한 일이 거기 있다.
+
 ## 이 저장소의 성격
 
 한 디렉터리에 두 가지가 같이 있다.
