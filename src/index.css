@@ -1,0 +1,70 @@
+@import 'tailwindcss';
+@import 'maplibre-gl/dist/maplibre-gl.css';
+
+/**
+ * 색상·간격은 CSS 변수 토큰으로 둔다.
+ * 다크모드는 Phase 1 범위 밖이지만, 토큰을 :root 한 곳에서만 읽으므로
+ * [data-theme="dark"] 블록을 더하는 것만으로 대응할 수 있다.
+ */
+@theme {
+  --color-surface: #ffffff;
+  --color-surface-sub: #f7f8fa;
+  --color-line: #e5e7eb;
+  --color-line-soft: #f0f1f3;
+  --color-ink: #1a1c1f;
+  --color-ink-mut: #6b7280;
+  --color-brand: #2563eb;
+  --color-brand-soft: #eff6ff;
+  --color-danger: #dc2626;
+  --color-warn: #b45309;
+  --color-warn-soft: #fffbeb;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic', '맑은 고딕',
+    system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: var(--color-surface);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
+  color: inherit;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+}
+
+textarea {
+  resize: vertical;
+}
+
+/* 터치 타깃 44px 이상 — 모바일 작도용 (02 §3) */
+@media (pointer: coarse) {
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+.maplibregl-ctrl-attrib.maplibregl-compact {
+  font-size: 10px;
+}
