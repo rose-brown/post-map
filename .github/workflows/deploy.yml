@@ -1,0 +1,66 @@
+name: CI · Deploy to Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 배포는 한 번에 하나만. 진행 중인 것을 취소하지 않는다(반쯤 배포된 상태를 만들지 않기 위해).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: 빌드 · 타입 검사
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # npm run build 는 `tsc -b && vite build` 다. 타입 에러가 있으면 여기서 멈춘다.
+      - name: 빌드
+        env:
+          # 불변 규칙 4 의 예외 — VWorld 타일 키는 도메인 등록 방식이라 번들에 들어간다.
+          # vworld.kr 에 <계정>.github.io 도메인을 등록해야 배포본에서 타일이 나온다.
+          VITE_VWORLD_KEY: ${{ secrets.VITE_VWORLD_KEY }}
+          # https://<계정>.github.io/<저장소>/ 로 서빙되므로 하위 경로를 넘긴다.
+          BASE_PATH: /${{ github.event.repository.name }}/
+        run: npm run build
+
+      - name: 키가 번들에 들어갔는지 확인
+        run: |
+          if [ -z "${{ secrets.VITE_VWORLD_KEY }}" ]; then
+            echo "::warning::VITE_VWORLD_KEY 시크릿이 없습니다. 배포본에서 배경지도가 비어 보입니다."
+          fi
+
+      - name: Pages 아티팩트 업로드
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Pages 배포
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
