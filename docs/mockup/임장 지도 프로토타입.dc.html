@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/wanted-design-system-43dc601f-4b29-4cfe-887b-532868d125e0/tokens/fig-tokens.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-43dc601f-4b29-4cfe-887b-532868d125e0/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-43dc601f-4b29-4cfe-887b-532868d125e0/tokens/typography.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-43dc601f-4b29-4cfe-887b-532868d125e0/tokens/aliases.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-43dc601f-4b29-4cfe-887b-532868d125e0/components/wanted/fig-assets.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-43dc601f-4b29-4cfe-887b-532868d125e0/ui_kits/recruit/fig-assets.css">
+<link rel="stylesheet" href="_ds/wanted-design-system-43dc601f-4b29-4cfe-887b-532868d125e0/styles.css">
+<script src="_ds/wanted-design-system-43dc601f-4b29-4cfe-887b-532868d125e0/_ds_bundle.js"></script>
+<style>
+body{margin:0;background:var(--wd-surface,#fff);font-family:var(--font-core,system-ui);color:var(--label-normal,#171719)}
+input,textarea,button{font-family:inherit;color:inherit}
+input:focus,textarea:focus{outline:none}
+textarea{resize:none}
+@keyframes wd-pin-in{from{opacity:0;transform:translate(-50%,-80%) scale(.8)}to{opacity:1;transform:translate(-50%,-100%) scale(1)}}
+@keyframes wd-panel-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes wd-pop-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</helmet>
+
+<div style="display:flex;flex-direction:column;min-height:100vh;background:var(--wd-surface)">
+
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 20px;border-bottom:1px solid var(--wd-line-hairline);position:sticky;top:0;z-index:30;background:var(--wd-surface)">
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="width:22px;height:22px;border-radius:7px;background:var(--wd-primary);display:flex;align-items:center;justify-content:center;color:#fff;font:700 12px/1 var(--font-core)">임</div>
+      <span class="wd-headline2" style="color:var(--wd-text-strong)">임장 지도</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:180px;max-width:420px;height:36px;padding:0 12px;border-radius:10px;background:var(--wd-fill)">
+      <span style="font:500 14px/1 var(--font-core);color:var(--wd-text-muted)">⌕</span>
+      <input class="wd-body2" placeholder="주소·단지명으로 검색" value="{{ query }}" onChange="{{ onQuery }}" style="flex:1;min-width:0;border:none;background:transparent" />
+    </div>
+    <div style="flex:1"></div>
+    <span class="wd-label2" style="color:var(--wd-text-muted)">{{ savedLabel }}</span>
+    <button onClick="{{ toggleAddMode }}" style="{{ addBtnStyle }}">{{ addBtnLabel }}</button>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;align-items:stretch;flex:1;min-height:0">
+
+    <div onClick="{{ onMapClick }}" style="{{ mapStyle }}">
+      <sc-for list="{{ pins }}" as="pin" hint-placeholder-count="3">
+        <div onClick="{{ pin.onClick }}" style="{{ pin.wrapStyle }}">
+          <div style="{{ pin.pillStyle }}"><span class="wd-label2">{{ pin.label }}</span></div>
+          <div style="{{ pin.stemStyle }}"></div>
+          <div style="{{ pin.dotStyle }}"></div>
+        </div>
+      </sc-for>
+      <div style="position:absolute;right:16px;top:16px;display:flex;flex-direction:column;gap:1px;border-radius:10px;overflow:hidden;box-shadow:var(--wd-shadow-2);background:var(--wd-line-hairline)">
+        <button onClick="{{ zoomIn }}" style="width:36px;height:36px;background:#fff;border:none;color:var(--wd-text-neutral);font:500 18px/1 var(--font-core);cursor:pointer">+</button>
+        <button onClick="{{ zoomOut }}" style="width:36px;height:36px;background:#fff;border:none;color:var(--wd-text-neutral);font:500 18px/1 var(--font-core);cursor:pointer">−</button>
+      </div>
+      <div style="position:absolute;left:50%;bottom:18px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:9999px;background:rgba(23,23,25,.82);color:#fff;backdrop-filter:blur(24px);pointer-events:none;max-width:90%">
+        <span class="wd-label2">{{ mapHint }}</span>
+      </div>
+    </div>
+
+    <!-- 우: 빈 노션 페이지 -->
+    <div style="flex:1 1 400px;min-width:320px;display:flex;flex-direction:column;border-left:1px solid var(--wd-line-hairline);background:var(--wd-surface)">
+      <sc-if value="{{ hasSelection }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;flex:1;animation:wd-panel-in .18s ease both">
+          <div style="display:flex;align-items:center;gap:8px;height:48px;padding:0 18px;border-bottom:1px solid var(--wd-line-hairline);flex:none">
+            <button onClick="{{ closePanel }}" style="border:none;background:transparent;color:var(--wd-primary);cursor:pointer;font:600 13px/1 var(--font-core);padding:6px 8px 6px 0">← 목록</button>
+            <span class="wd-label2" style="color:var(--wd-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ sel.district }}</span>
+            <div style="flex:1"></div>
+            <span class="wd-label2" style="color:var(--wd-text-muted)">{{ savedLabel }}</span>
+            <button onClick="{{ closePanel }}" style="border:none;background:var(--wd-fill);color:var(--wd-text-neutral);padding:6px 10px;border-radius:8px;cursor:pointer;font:600 13px/1 var(--font-core)">✕</button>
+          </div>
+
+          <div style="flex:1;overflow-y:auto;max-height:78vh;padding:22px 22px 28px;display:flex;flex-direction:column;gap:4px">
+            <div style="position:relative;margin-bottom:10px">
+              <button onClick="{{ openTemplateMenu }}" style="border:none;background:var(--wd-fill);color:var(--wd-text-muted);padding:6px 11px;border-radius:8px;cursor:pointer;font:600 13px/1 var(--font-core)">◻ 템플릿 적용</button>
+              <sc-if value="{{ templateMenuOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute;left:0;top:38px;z-index:20;width:300px;border-radius:12px;background:#fff;box-shadow:var(--wd-shadow-3),0 0 0 1px rgba(112,115,124,.16);padding:8px;display:flex;flex-direction:column;gap:2px;animation:wd-pop-in .14s ease both">
+                  <span class="wd-caption2" style="color:var(--wd-text-muted);padding:6px 10px 4px">템플릿 — 현재 페이지에 추가됩니다</span>
+                  <sc-for list="{{ templates }}" as="t" hint-placeholder-count="3">
+                    <button onClick="{{ t.onPick }}" style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:8px 10px;border:none;border-radius:8px;background:transparent;cursor:pointer;text-align:left" style-hover="background:var(--wd-fill-soft)">
+                      <span class="wd-label2" style="color:var(--wd-text-strong)">{{ t.name }}</span>
+                      <span class="wd-caption2" style="color:var(--wd-text-muted)">{{ t.desc }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+
+            <input class="wd-heading1" value="{{ sel.title }}" onChange="{{ onTitle }}" placeholder="제목 없음" style="border:none;background:transparent;color:var(--wd-text-strong);padding:2px 0;width:100%" />
+            <div class="wd-caption1" style="color:var(--wd-text-muted);margin-bottom:12px">{{ sel.address }} · {{ sel.coords }}</div>
+
+            <sc-for list="{{ props }}" as="p" hint-placeholder-count="0">
+              <div style="display:flex;align-items:center;gap:10px;padding:4px 8px;border-radius:6px" style-hover="background:var(--wd-fill-soft)">
+                <span class="wd-body2" style="width:104px;flex:none;color:var(--wd-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">◻ {{ p.label }}</span>
+                <input class="wd-body2" value="{{ p.value }}" onChange="{{ p.onChange }}" placeholder="비어 있음" style="flex:1;min-width:0;border:none;background:transparent;color:var(--wd-text-strong)" />
+                <span class="wd-caption1" style="color:var(--wd-text-muted)">{{ p.hint }}</span>
+                <button onClick="{{ p.onRemove }}" style="border:none;background:transparent;color:var(--wd-text-muted);cursor:pointer;font:500 12px/1 var(--font-core)">✕</button>
+              </div>
+            </sc-for>
+
+            <div style="position:relative;margin:2px 0 10px">
+              <button onClick="{{ openPropMenu }}" style="border:none;background:transparent;color:var(--wd-text-muted);cursor:pointer;font:500 15px/1.5 var(--font-core);padding:4px 8px">＋ 속성 추가</button>
+              <sc-if value="{{ propMenuOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute;left:0;top:34px;z-index:20;width:260px;border-radius:12px;background:#fff;box-shadow:var(--wd-shadow-3),0 0 0 1px rgba(112,115,124,.16);padding:8px;display:flex;flex-direction:column;gap:2px;animation:wd-pop-in .14s ease both">
+                  <span class="wd-caption2" style="color:var(--wd-text-muted);padding:6px 10px 4px">속성 추가</span>
+                  <sc-for list="{{ propPresets }}" as="pp" hint-placeholder-count="4">
+                    <button onClick="{{ pp.onPick }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:none;border-radius:8px;background:transparent;cursor:pointer;text-align:left" style-hover="background:var(--wd-fill-soft)">
+                      <span class="wd-label2" style="color:var(--wd-text-strong)">{{ pp.label }}</span>
+                      <span class="wd-caption2" style="color:var(--wd-text-muted)">{{ pp.kind }}</span>
+                    </button>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+
+            <sc-for list="{{ blocks }}" as="b" hint-placeholder-count="0">
+              <div style="display:flex;align-items:flex-start;gap:6px;padding:2px 0">
+                <div style="width:22px;flex:none;padding-top:6px;color:var(--wd-text-muted);font:500 12px/1 var(--font-core);text-align:right">⠿</div>
+                <div style="flex:1;min-width:0">
+                  <sc-if value="{{ b.isH }}" hint-placeholder-val="{{ false }}">
+                    <input class="wd-headline1" value="{{ b.text }}" onChange="{{ b.onText }}" placeholder="제목" style="width:100%;border:none;background:transparent;color:var(--wd-text-strong);padding:4px 0" />
+                  </sc-if>
+                  <sc-if value="{{ b.isText }}" hint-placeholder-val="{{ false }}">
+                    <textarea class="wd-body2" value="{{ b.text }}" onChange="{{ b.onText }}" placeholder="본 대로 적어두세요" style="width:100%;min-height:64px;border:none;background:transparent;color:var(--wd-text);padding:4px 0;box-sizing:border-box"></textarea>
+                  </sc-if>
+                  <sc-if value="{{ b.isCallout }}" hint-placeholder-val="{{ false }}">
+                    <textarea class="wd-body2" value="{{ b.text }}" onChange="{{ b.onText }}" placeholder="확인이 필요한 내용" style="width:100%;min-height:56px;border:none;border-left:3px solid var(--wd-cautionary);background:rgba(255,146,0,.06);color:var(--wd-text);padding:10px 12px;box-sizing:border-box"></textarea>
+                  </sc-if>
+                  <sc-if value="{{ b.isTodo }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:6px;padding:4px 0">
+                      <sc-for list="{{ b.items }}" as="c" hint-placeholder-count="2">
+                        <div style="display:flex;align-items:center;gap:10px">
+                          <button onClick="{{ c.onToggle }}" style="{{ c.boxStyle }}">{{ c.mark }}</button>
+                          <input class="wd-body2" value="{{ c.text }}" onChange="{{ c.onText }}" placeholder="확인할 항목" style="{{ c.textStyle }}" />
+                          <button onClick="{{ c.onRemove }}" style="border:none;background:transparent;color:var(--wd-text-muted);cursor:pointer;font:500 12px/1 var(--font-core)">✕</button>
+                        </div>
+                      </sc-for>
+                      <button onClick="{{ b.onAddItem }}" style="align-self:flex-start;border:none;background:transparent;color:var(--wd-primary);cursor:pointer;font:600 13px/1 var(--font-core);padding:2px 0">＋ 항목</button>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ b.isGallery }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:4px 0">
+                      <sc-for list="{{ b.photos }}" as="ph" hint-placeholder-count="2">
+                        <div style="{{ ph.style }}">
+                          <button onClick="{{ ph.onRemove }}" style="position:absolute;right:5px;top:5px;border:none;border-radius:9999px;width:20px;height:20px;background:rgba(23,23,25,.64);color:#fff;cursor:pointer;font:600 10px/1 var(--font-core)">✕</button>
+                        </div>
+                      </sc-for>
+                      <label style="aspect-ratio:4/3;border-radius:10px;border:1px dashed var(--wd-line);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--wd-text-muted)" style-hover="border-color:var(--wd-primary);color:var(--wd-primary)">
+                        <span class="wd-caption1">＋ 업로드</span>
+                        <input type="file" accept="image/*" multiple onChange="{{ b.onPhotos }}" style="display:none" />
+                      </label>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ b.isFiles }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;gap:6px;padding:4px 0">
+                      <sc-for list="{{ b.files }}" as="f" hint-placeholder-count="1">
+                        <div style="display:flex;align-items:center;gap:10px;height:42px;padding:0 12px;border-radius:10px;border:1px solid var(--wd-line-hairline)">
+                          <div style="{{ f.badgeStyle }}">{{ f.ext }}</div>
+                          <span class="wd-body2" style="flex:1;min-width:0;color:var(--wd-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ f.name }}</span>
+                          <span class="wd-caption1" style="color:var(--wd-text-muted)">{{ f.size }}</span>
+                          <button onClick="{{ f.onRemove }}" style="border:none;background:transparent;color:var(--wd-text-muted);cursor:pointer;font:500 12px/1 var(--font-core)">✕</button>
+                        </div>
+                      </sc-for>
+                      <label style="display:flex;align-items:center;gap:10px;height:42px;padding:0 12px;border-radius:10px;border:1px dashed var(--wd-line);cursor:pointer" style-hover="border-color:var(--wd-primary)">
+                        <span class="wd-body2" style="color:var(--wd-text-muted)">＋ PDF·이미지 첨부</span>
+                        <input type="file" multiple onChange="{{ b.onFiles }}" style="display:none" />
+                      </label>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ b.isDivider }}" hint-placeholder-val="{{ false }}">
+                    <div style="height:1px;background:var(--wd-line-hairline);margin:10px 0"></div>
+                  </sc-if>
+                </div>
+                <button onClick="{{ b.onRemove }}" style="border:none;background:transparent;color:var(--wd-text-muted);cursor:pointer;font:500 12px/1 var(--font-core);padding-top:6px">✕</button>
+              </div>
+            </sc-for>
+
+            <sc-if value="{{ isEmptyPage }}" hint-placeholder-val="{{ false }}">
+              <div class="wd-body2" style="color:var(--wd-text-muted);padding:6px 8px">빈 페이지입니다. 아래 ＋ 로 블록을, 위에서 속성이나 템플릿을 추가하세요.</div>
+            </sc-if>
+
+            <div style="position:relative;margin-top:6px">
+              <button onClick="{{ openBlockMenu }}" style="border:none;background:transparent;color:var(--wd-text-muted);cursor:pointer;font:500 15px/1.5 var(--font-core);padding:4px 8px" style-hover="color:var(--wd-primary)">＋ 블록 추가</button>
+              <sc-if value="{{ blockMenuOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute;left:0;top:34px;z-index:20;width:300px;border-radius:12px;background:#fff;box-shadow:var(--wd-shadow-3),0 0 0 1px rgba(112,115,124,.16);padding:8px;display:flex;flex-direction:column;gap:2px;animation:wd-pop-in .14s ease both">
+                  <span class="wd-caption2" style="color:var(--wd-text-muted);padding:6px 10px 4px">블록 추가</span>
+                  <sc-for list="{{ blockTypes }}" as="bt" hint-placeholder-count="5">
+                    <button onClick="{{ bt.onPick }}" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:none;border-radius:8px;background:transparent;cursor:pointer;text-align:left" style-hover="background:var(--wd-fill-soft)">
+                      <span style="width:26px;height:26px;flex:none;border-radius:6px;background:var(--wd-fill);color:var(--wd-text-neutral);font:600 12px/26px var(--font-core);text-align:center">{{ bt.icon }}</span>
+                      <span style="display:flex;flex-direction:column">
+                        <span class="wd-label2" style="color:var(--wd-text-strong)">{{ bt.name }}</span>
+                        <span class="wd-caption2" style="color:var(--wd-text-muted)">{{ bt.desc }}</span>
+                      </span>
+                    </button>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 18px;border-top:1px solid var(--wd-line-hairline);flex:none">
+            <button onClick="{{ removeSelected }}" style="border:none;background:transparent;color:var(--wd-negative);cursor:pointer;font:600 14px/1 var(--font-core);flex:1;text-align:left">삭제</button>
+            <button onClick="{{ closePanel }}" style="border:none;background:var(--wd-primary);color:#fff;border-radius:12px;padding:11px 24px;cursor:pointer;font:600 14px/1 var(--font-core)">완료</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ noSelection }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;flex-direction:column;min-height:0">
+          <div style="display:flex;align-items:center;gap:8px;height:48px;padding:0 18px;border-bottom:1px solid var(--wd-line-hairline);flex:none">
+            <span class="wd-headline2" style="color:var(--wd-text-strong)">임장 목록</span>
+            <span class="wd-label2" style="color:var(--wd-primary)">{{ count }}</span>
+            <div style="flex:1"></div>
+            <button onClick="{{ sortByDate }}" style="{{ sortDateStyle }}">최근순</button>
+            <button onClick="{{ sortByPrice }}" style="{{ sortPriceStyle }}">가격순</button>
+          </div>
+          <div style="flex:1;overflow-y:auto;max-height:78vh;padding:14px 20px 24px">
+            <div style="position:relative;padding-left:18px">
+              <div style="position:absolute;left:4px;top:8px;bottom:8px;width:1px;background:var(--wd-line-hairline)"></div>
+              <sc-for list="{{ listItems }}" as="row" hint-placeholder-count="4">
+                <div>
+                  <sc-if value="{{ row.showDate }}" hint-placeholder-val="{{ true }}">
+                    <div class="wd-caption2" style="color:var(--wd-text-muted);margin:10px 0 8px">{{ row.date }}</div>
+                  </sc-if>
+                  <div onClick="{{ row.onSelect }}" style="{{ row.style }}" style-hover="background:var(--wd-fill-soft)">
+                    <div style="{{ row.dotStyle }}"></div>
+                    <div style="{{ row.thumbStyle }}"></div>
+                    <div style="min-width:0;display:flex;flex-direction:column;gap:2px;flex:1">
+                      <div class="wd-label1" style="color:var(--wd-text-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ row.title }}</div>
+                      <div class="wd-caption1" style="color:var(--wd-text-muted)">{{ row.meta }}</div>
+                    </div>
+                    <div class="wd-caption1" style="color:var(--wd-text-muted);align-self:center">›</div>
+                  </div>
+                </div>
+              </sc-for>
+              <sc-if value="{{ isEmptyList }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:8px;padding:20px 0">
+                  <span class="wd-headline2" style="color:var(--wd-text-strong)">아직 임장 기록이 없습니다</span>
+                  <span class="wd-body2" style="color:var(--wd-text-muted)">‘핀 추가’를 켜고 지도를 클릭하면 빈 페이지가 만들어집니다.</span>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+const KEY = 'imjang-map-v2';
+const uid = (p) => p + Math.random().toString(36).slice(2, 8);
+const PROP_PRESETS = [
+  {label:'방 수', kind:'숫자', hint:'개'},
+  {label:'욕실 수', kind:'숫자', hint:'개'},
+  {label:'면적', kind:'숫자', hint:'㎡'},
+  {label:'가격', kind:'숫자', hint:'만원'},
+  {label:'상태', kind:'텍스트', hint:''},
+  {label:'임장일', kind:'날짜', hint:''},
+  {label:'중개사', kind:'텍스트', hint:''},
+  {label:'관리비', kind:'숫자', hint:'만원'}
+];
+const BLOCK_TYPES = [
+  {type:'text', icon:'¶', name:'텍스트', desc:'자유롭게 메모'},
+  {type:'h', icon:'H', name:'제목', desc:'섹션 구분'},
+  {type:'todo', icon:'☑', name:'체크리스트', desc:'확인할 항목'},
+  {type:'gallery', icon:'◫', name:'사진 갤러리', desc:'여러 장 업로드'},
+  {type:'files', icon:'⎘', name:'파일', desc:'PDF·이미지 첨부'},
+  {type:'callout', icon:'!', name:'콜아웃', desc:'강조할 메모'},
+  {type:'divider', icon:'—', name:'구분선', desc:''}
+];
+const TEMPLATES = [
+  {name:'임장 기본', desc:'속성 4개 + 체크리스트 + 사진 + 메모',
+   props:[{label:'방 수',value:'',hint:'개'},{label:'욕실 수',value:'',hint:'개'},{label:'면적',value:'',hint:'㎡'},{label:'가격',value:'',hint:'만원'}],
+   blocks:[{type:'h',text:'첫인상'},{type:'text',text:''},{type:'todo',items:[{t:'수압 확인',d:false},{t:'채광·향',d:false},{t:'결로·곰팡이',d:false},{t:'소음',d:false},{t:'주차',d:false}]},{type:'gallery',photos:[]}]},
+  {name:'간단 메모', desc:'텍스트 블록 하나만',
+   props:[], blocks:[{type:'text',text:''}]},
+  {name:'계약 검토', desc:'가격·관리비 속성 + 파일 + 콜아웃',
+   props:[{label:'가격',value:'',hint:'만원'},{label:'관리비',value:'',hint:'만원'},{label:'중개사',value:'',hint:''}],
+   blocks:[{type:'files',files:[]},{type:'callout',text:'등기부등본으로 교차 확인 필요'}]}
+];
+const SEED = [
+  {id:'p1',title:'역삼 e편한세상 103동',address:'서울 강남구 역삼동 737',district:'강남구 역삼동',lat:37.4979,lng:127.0276,x:38,y:34,
+   props:[{label:'방 수',value:'2',hint:'개'},{label:'욕실 수',value:'1',hint:'개'},{label:'면적',value:'42.15',hint:'㎡'},{label:'가격',value:'35000',hint:'만원'}],
+   blocks:[{id:'b1',type:'h',text:'첫인상'},{id:'b2',type:'text',text:'남향이라 오후 3시에도 거실 햇빛이 충분했다. 엘리베이터 1대, 관리비 12만원.'},{id:'b3',type:'todo',items:[{t:'수압 확인',d:true},{t:'베란다 결로 흔적',d:false}]}],
+   createdAt:'2026-09-18T04:00:00.000Z'},
+  {id:'p2',title:'서초 래미안',address:'서울 서초구 서초동 1305',district:'서초구 서초동',lat:37.4912,lng:127.0089,x:66,y:56,
+   props:[{label:'가격',value:'124000',hint:'만원'}], blocks:[], createdAt:'2026-09-18T02:00:00.000Z'},
+  {id:'p3',title:'합정 한강푸르지오',address:'서울 마포구 합정동 411',district:'마포구 합정동',lat:37.5495,lng:126.9137,x:22,y:70,
+   props:[], blocks:[], createdAt:'2026-09-14T05:00:00.000Z'}
+];
+const ADDR = [
+  {address:'서울 성동구 성수동1가 685',district:'성동구 성수동',title:'성수동 매물',lat:37.5446,lng:127.0559},
+  {address:'서울 마포구 상수동 72',district:'마포구 상수동',title:'상수동 매물',lat:37.5478,lng:126.9226},
+  {address:'서울 송파구 잠실동 40',district:'송파구 잠실동',title:'잠실동 매물',lat:37.5109,lng:127.0846},
+  {address:'서울 용산구 이촌동 300',district:'용산구 이촌동',title:'이촌동 매물',lat:37.5184,lng:126.9725},
+  {address:'서울 광진구 자양동 227',district:'광진구 자양동',title:'자양동 매물',lat:37.5345,lng:127.0823}
+];
+
+class Component extends DCLogic {
+  state = {items: SEED, selectedId: null, addMode: true, query: '', sort: 'date', saved: '자동 저장됨', zoom: 1, menu: null};
+
+  componentDidMount() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (Array.isArray(p.items)) this.setState({items: p.items, selectedId: p.selectedId || null});
+      }
+    } catch (e) {}
+  }
+  persist(items, selectedId) {
+    const sid = selectedId === undefined ? this.state.selectedId : selectedId;
+    this.setState({items, selectedId: sid, saved: '저장됨 · 방금'});
+    try { localStorage.setItem(KEY, JSON.stringify({items, selectedId: sid})); }
+    catch (e) { this.setState({saved: '저장 공간 부족'}); }
+  }
+  update(patch) {
+    this.persist(this.state.items.map(it => it.id === this.state.selectedId ? {...it, ...patch} : it));
+  }
+  setBlock(idx, patch) {
+    const sel = this.sel();
+    const blocks = sel.blocks.slice();
+    blocks[idx] = {...blocks[idx], ...patch};
+    this.update({blocks});
+  }
+  sel() { return this.state.items.find(i => i.id === this.state.selectedId) || null; }
+  money(v) {
+    const n = Number(v) || 0; if (!n) return '';
+    const eok = Math.floor(n / 10000), rest = n % 10000;
+    if (eok && rest) return eok + '억 ' + rest.toLocaleString();
+    if (eok) return eok + '억';
+    return n.toLocaleString() + '만';
+  }
+  priceOf(it) { const p = (it.props || []).find(p => p.label === '가격'); return p ? Number(p.value) || 0 : 0; }
+  dateOf(iso) { const d = new Date(iso); return d.getFullYear() + '. ' + String(d.getMonth()+1).padStart(2,'0') + '. ' + String(d.getDate()).padStart(2,'0'); }
+  firstPhoto(it) {
+    const g = (it.blocks || []).find(b => b.type === 'gallery' && b.photos && b.photos.length);
+    return g ? g.photos[0].url : null;
+  }
+  metaOf(it) {
+    const filled = (it.props || []).filter(p => String(p.value || '').length);
+    if (!filled.length) return (it.blocks || []).length ? (it.blocks.length + '개 블록') : '빈 페이지';
+    return filled.slice(0, 3).map(p => p.label === '가격' ? this.money(p.value) : p.value + (p.hint || '')).join(' · ');
+  }
+
+  renderVals() {
+    const S = this.state, sel = this.sel();
+    const q = S.query.trim();
+    let list = S.items.filter(i => !q || (i.title + i.address).indexOf(q) >= 0);
+    list = list.slice().sort((a,b) => S.sort === 'price' ? (this.priceOf(b) - this.priceOf(a)) : (new Date(b.createdAt) - new Date(a.createdAt)));
+
+    let lastDate = '';
+    const listItems = list.map(it => {
+      const date = this.dateOf(it.createdAt);
+      const showDate = S.sort === 'date' && date !== lastDate;
+      if (showDate) lastDate = date;
+      const isSel = it.id === S.selectedId;
+      const ph = this.firstPhoto(it);
+      return {
+        date, showDate, title: it.title || '제목 없음', meta: this.metaOf(it),
+        onSelect: () => this.setState({selectedId: it.id, menu: null}),
+        style: {position:'relative',display:'flex',gap:'10px',padding:'10px',margin:'0 -10px 6px',borderRadius:'12px',cursor:'pointer',background:isSel?'rgba(0,102,255,.06)':'transparent',boxShadow:isSel?'inset 0 0 0 1px rgba(0,102,255,.16)':'none',transition:'background .15s'},
+        dotStyle: {position:'absolute',left:'-19px',top:'20px',width:'9px',height:'9px',borderRadius:'9999px',background:isSel?'var(--wd-primary)':'var(--wd-line-strong)',boxShadow:'0 0 0 3px var(--wd-surface)'},
+        thumbStyle: {width:'44px',height:'44px',flex:'none',borderRadius:'8px',background: ph ? 'center/cover no-repeat url('+ph+')' : 'var(--wd-fill)'}
+      };
+    });
+
+    const pins = S.items.map(it => {
+      const isSel = it.id === S.selectedId;
+      const price = this.money(this.priceOf(it));
+      return {
+        label: price || (it.title || '새 핀'),
+        onClick: (e) => { e.stopPropagation(); this.setState({selectedId: it.id, menu: null}); },
+        wrapStyle: {position:'absolute',left:it.x+'%',top:it.y+'%',transform:'translate(-50%,-100%)',display:'flex',flexDirection:'column',alignItems:'center',cursor:'pointer',zIndex:isSel?5:2,animation:'wd-pin-in .22s ease both'},
+        pillStyle: {padding:'7px 12px',borderRadius:'9999px',maxWidth:'160px',overflow:'hidden',textOverflow:'ellipsis',background:isSel?'var(--wd-primary)':'#fff',color:isSel?'#fff':'var(--wd-text-strong)',boxShadow:isSel?'0 6px 18px rgba(0,102,255,.32)':'var(--wd-shadow-2)',whiteSpace:'nowrap'},
+        stemStyle: {width:'2px',height:'11px',background:isSel?'var(--wd-primary)':'#fff'},
+        dotStyle: {width:'10px',height:'10px',borderRadius:'9999px',background:isSel?'var(--wd-primary)':'#fff',boxShadow:isSel?'0 0 0 6px rgba(0,102,255,.2)':'0 0 0 3px rgba(23,23,25,.18)'}
+      };
+    });
+
+    const z = S.zoom;
+    const chip = (on) => ({padding:'6px 12px',borderRadius:'9999px',border:on?'none':'1px solid var(--wd-line)',background:on?'var(--wd-primary)':'transparent',color:on?'#fff':'var(--wd-text-neutral)',cursor:'pointer',font:'600 13px/1 var(--font-core)'});
+    const tones = ['#d9dbdf','#cfd4da','#e2e4e8'];
+
+    const props = sel ? (sel.props || []).map((p, i) => ({
+      label: p.label, value: p.value, hint: p.hint || '',
+      onChange: (e) => { const n = sel.props.slice(); n[i] = {...n[i], value: e.target.value}; this.update({props:n}); },
+      onRemove: () => { const n = sel.props.slice(); n.splice(i,1); this.update({props:n}); }
+    })) : [];
+
+    const blocks = sel ? (sel.blocks || []).map((b, i) => {
+      const base = {
+        isH: b.type==='h', isText: b.type==='text', isTodo: b.type==='todo', isGallery: b.type==='gallery',
+        isFiles: b.type==='files', isCallout: b.type==='callout', isDivider: b.type==='divider',
+        text: b.text || '',
+        onText: (e) => this.setBlock(i, {text: e.target.value}),
+        onRemove: () => { const n = sel.blocks.slice(); n.splice(i,1); this.update({blocks:n}); }
+      };
+      if (b.type === 'todo') {
+        base.items = (b.items || []).map((c, j) => ({
+          text: c.t, mark: c.d ? '✓' : '',
+          boxStyle: {width:'18px',height:'18px',flex:'none',borderRadius:'5px',border:c.d?'none':'1.5px solid var(--wd-line-strong)',background:c.d?'var(--wd-primary)':'transparent',color:'#fff',cursor:'pointer',font:'700 10px/1 var(--font-core)',display:'flex',alignItems:'center',justifyContent:'center'},
+          textStyle: {flex:1,minWidth:0,border:'none',background:'transparent',color:c.d?'var(--wd-text-muted)':'var(--wd-text)',textDecoration:c.d?'line-through':'none'},
+          onToggle: () => { const n = b.items.slice(); n[j] = {...n[j], d: !n[j].d}; this.setBlock(i, {items:n}); },
+          onText: (e) => { const n = b.items.slice(); n[j] = {...n[j], t: e.target.value}; this.setBlock(i, {items:n}); },
+          onRemove: () => { const n = b.items.slice(); n.splice(j,1); this.setBlock(i, {items:n}); }
+        }));
+        base.onAddItem = () => this.setBlock(i, {items: (b.items || []).concat([{t:'', d:false}])});
+      }
+      if (b.type === 'gallery') {
+        base.photos = (b.photos || []).map((p, j) => ({
+          style: {position:'relative',aspectRatio:'4/3',borderRadius:'10px',background: p.url ? 'center/cover no-repeat url('+p.url+')' : tones[j%3]},
+          onRemove: () => { const n = b.photos.slice(); n.splice(j,1); this.setBlock(i, {photos:n}); }
+        }));
+        base.onPhotos = (e) => {
+          const fs = Array.from(e.target.files || []).slice(0, 6);
+          if (!fs.length) return;
+          Promise.all(fs.map(f => new Promise(res => { const r = new FileReader(); r.onload = () => res({id:uid('ph'), url:r.result}); r.readAsDataURL(f); })))
+            .then(ps => this.setBlock(i, {photos: (b.photos || []).concat(ps)}));
+        };
+      }
+      if (b.type === 'files') {
+        base.files = (b.files || []).map((f, j) => {
+          const ext = (f.name.split('.').pop() || '').toUpperCase().slice(0,3);
+          return {
+            name: f.name, size: f.size, ext,
+            badgeStyle: {width:'22px',height:'22px',flex:'none',borderRadius:'5px',background:ext==='PDF'?'var(--wd-negative)':'var(--wd-fill-strong)',color:ext==='PDF'?'#fff':'var(--wd-text-muted)',display:'flex',alignItems:'center',justifyContent:'center',font:'700 7px/1 var(--font-core)'},
+            onRemove: () => { const n = b.files.slice(); n.splice(j,1); this.setBlock(i, {files:n}); }
+          };
+        });
+        base.onFiles = (e) => {
+          const fs = Array.from(e.target.files || []).map(f => ({name: f.name, size: f.size/1048576 < 1 ? Math.round(f.size/1024)+'KB' : (f.size/1048576).toFixed(1)+'MB'}));
+          if (fs.length) this.setBlock(i, {files: (b.files || []).concat(fs)});
+        };
+      }
+      return base;
+    }) : [];
+
+    return {
+      count: S.items.length, query: S.query,
+      onQuery: (e) => this.setState({query: e.target.value}),
+      savedLabel: S.saved,
+      addBtnLabel: S.addMode ? '핀 추가 모드 켜짐' : '핀 추가',
+      addBtnStyle: {display:'flex',alignItems:'center',gap:'6px',padding:'9px 16px',borderRadius:'9999px',border:'none',cursor:'pointer',font:'600 13px/1 var(--font-core)',background:S.addMode?'var(--wd-primary)':'var(--wd-fill)',color:S.addMode?'#fff':'var(--wd-text-neutral)',boxShadow:S.addMode?'0 6px 18px rgba(0,102,255,.28)':'none'},
+      toggleAddMode: () => this.setState({addMode: !S.addMode}),
+      sortByDate: () => this.setState({sort:'date'}), sortByPrice: () => this.setState({sort:'price'}),
+      sortDateStyle: chip(S.sort === 'date'), sortPriceStyle: chip(S.sort === 'price'),
+      listItems, isEmptyList: listItems.length === 0,
+      pins,
+      mapStyle: {flex:'3 1 420px',minWidth:'320px',minHeight:'440px',position:'relative',overflow:'hidden',cursor:S.addMode?'crosshair':'default',backgroundColor:'#eef0f2',backgroundImage:'radial-gradient(circle at 76% 18%,#dfe9dd 0 '+(92*z)+'px,transparent '+(92*z)+'px),linear-gradient(28deg,transparent 47.2%,#ffffff 47.2% 50.4%,transparent 50.4%),repeating-linear-gradient(90deg,transparent 0 '+(118*z)+'px,#ffffff '+(118*z)+'px '+(128*z)+'px),repeating-linear-gradient(0deg,transparent 0 '+(96*z)+'px,#ffffff '+(96*z)+'px '+(104*z)+'px),linear-gradient(-10deg,transparent 64%,#dbe7f3 64% 76%,transparent 76%)'},
+      mapHint: S.addMode ? '지도를 클릭하면 빈 페이지가 있는 핀이 생성됩니다' : '핀을 클릭해 페이지를 열어보세요',
+      onMapClick: (e) => {
+        if (!S.addMode) return;
+        const r = e.currentTarget.getBoundingClientRect();
+        const x = Math.max(4, Math.min(96, ((e.clientX - r.left)/r.width)*100));
+        const y = Math.max(8, Math.min(94, ((e.clientY - r.top)/r.height)*100));
+        const a = ADDR[S.items.length % ADDR.length];
+        const it = {id:uid('p'), title:'', address:a.address, district:a.district, lat:a.lat, lng:a.lng, x:+x.toFixed(1), y:+y.toFixed(1), props:[], blocks:[], createdAt:new Date().toISOString()};
+        this.persist(S.items.concat([it]), it.id);
+      },
+      zoomIn: (e) => { e.stopPropagation(); this.setState({zoom: Math.min(1.8, +(S.zoom+.2).toFixed(2))}); },
+      zoomOut: (e) => { e.stopPropagation(); this.setState({zoom: Math.max(.6, +(S.zoom-.2).toFixed(2))}); },
+      hasSelection: !!sel, noSelection: !sel,
+      sel: sel ? {title: sel.title, address: sel.address, district: sel.district, coords: Number(sel.lat).toFixed(4)+', '+Number(sel.lng).toFixed(4)} : {},
+      onTitle: (e) => this.update({title: e.target.value}),
+      props, blocks,
+      isEmptyPage: !!sel && !(sel.props||[]).length && !(sel.blocks||[]).length,
+      propMenuOpen: S.menu === 'prop', blockMenuOpen: S.menu === 'block', templateMenuOpen: S.menu === 'template',
+      openPropMenu: () => this.setState({menu: S.menu === 'prop' ? null : 'prop'}),
+      openBlockMenu: () => this.setState({menu: S.menu === 'block' ? null : 'block'}),
+      openTemplateMenu: () => this.setState({menu: S.menu === 'template' ? null : 'template'}),
+      propPresets: PROP_PRESETS.map(p => ({
+        label: p.label, kind: p.kind,
+        onPick: () => { this.update({props: (sel.props||[]).concat([{label:p.label, value:'', hint:p.hint}])}); this.setState({menu:null}); }
+      })),
+      blockTypes: BLOCK_TYPES.map(t => ({
+        icon: t.icon, name: t.name, desc: t.desc,
+        onPick: () => {
+          const nb = {id: uid('b'), type: t.type};
+          if (t.type === 'todo') nb.items = [{t:'', d:false}];
+          if (t.type === 'gallery') nb.photos = [];
+          if (t.type === 'files') nb.files = [];
+          if (t.type === 'text' || t.type === 'h' || t.type === 'callout') nb.text = '';
+          this.update({blocks: (sel.blocks||[]).concat([nb])});
+          this.setState({menu:null});
+        }
+      })),
+      templates: TEMPLATES.map(t => ({
+        name: t.name, desc: t.desc,
+        onPick: () => {
+          const existing = (sel.props||[]).map(p => p.label);
+          const addProps = t.props.filter(p => existing.indexOf(p.label) < 0);
+          const addBlocks = t.blocks.map(b => ({...b, id: uid('b'), items: b.items ? b.items.map(x => ({...x})) : undefined, photos: b.photos ? [] : undefined, files: b.files ? [] : undefined}));
+          this.update({props: (sel.props||[]).concat(addProps), blocks: (sel.blocks||[]).concat(addBlocks)});
+          this.setState({menu:null});
+        }
+      })),
+      closePanel: () => this.setState({selectedId: null, menu: null}),
+      removeSelected: () => this.persist(S.items.filter(i => i.id !== S.selectedId), null)
+    };
+  }
+}
+
+</script>
+</body>
+</html>

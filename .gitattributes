@@ -1,0 +1,3 @@
+# 저장소 안에서는 LF 로 통일한다. Windows 체크아웃 시의 CRLF 경고를 없앤다.
+* text=auto eol=lf
+*.png binary
