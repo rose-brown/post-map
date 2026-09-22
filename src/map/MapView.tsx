@@ -5,9 +5,18 @@ import {
   GeolocateControl,
   ScaleControl,
   AttributionControl,
+  setWorkerUrl,
   type GeoJSONSource,
   type MapMouseEvent,
 } from 'maplibre-gl'
+// MapLibre 는 워커 경로를 런타임에 자기 자신의 형제 파일로 계산한다
+// (`new URL('./maplibre-gl-worker.mjs', import.meta.url)`). 정적 분석이 안 되므로 번들러가
+// 그 파일을 산출물에 넣지 않고, 배포본에서 assets/maplibre-gl-worker.mjs 가 404 가 된다.
+// 워커가 죽으면 GeoJSON 소스를 타일링하지 못해 **벡터 레이어만** 사라진다
+// (래스터 배경지도는 워커를 쓰지 않아 멀쩡해서 원인이 안 보인다 — dev 에서는 maplibre 가
+// node_modules 에서 그대로 서빙돼 형제 파일이 있으므로 재현되지 않는다).
+// ?worker&url 은 워커를 의존 청크(maplibre-gl-shared.mjs)까지 묶어 산출물로 내보내고 그 URL 을 준다.
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import {
   TerraDraw,
   TerraDrawSelectMode,
@@ -26,6 +35,8 @@ import { geocoder } from '../providers/geocoding'
 import { uid } from '../types'
 import { ringLabelPoints } from './rings'
 import { hasMarker, markerById, markerImageId, pinSvg } from './markers'
+
+setWorkerUrl(maplibreWorkerUrl)
 
 const EMPTY: FeatureCollection = { type: 'FeatureCollection', features: [] }
 
