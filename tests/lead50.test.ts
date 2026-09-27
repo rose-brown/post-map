@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  SCHEMA, TRADES_BLOCK_ID, STAR_RANK, leafRegions, jibunOf, matchTrades, summarizeTrades, formatPrice,
+  SCHEMA, TRADES_BLOCK_ID, STAR_RANK, leafRegions, jibunOf, dongOf, matchTrades, summarizeTrades, formatPrice,
   recentTradeLine, tradesBlock, buildProperties, mergeSchema, mergeFeature, duplicateIds, sggCodesFor, rankIcon,
 } from '../scripts/lead50/build.ts'
 import type { Complex, Trade } from '../scripts/lead50/build.ts'
@@ -56,6 +56,14 @@ test('jibunOf: 부번 0 은 본번만, 앞자리 0 제거, 본번 없으면 빈 
   assert.equal(jibunOf('0075', '0002'), '75-2')
   assert.equal(jibunOf(undefined, '0'), '')
   assert.equal(jibunOf('', undefined), '')
+})
+
+test('dongOf: 동은 동, 읍·면은 읍 + 리, 못 찾으면 fallback', () => {
+  assert.equal(dongOf('경기도 안양시 만안구 석수동 484', '석수동', 'X'), '석수동')
+  assert.equal(dongOf('경기도 가평군 가평읍 대곡리 695', '가평읍', '가평읍'), '가평읍 대곡리')
+  assert.equal(dongOf('경기도 양평군 양서면 양수리 12-3', '양서면', '양서면'), '양서면 양수리')
+  assert.equal(dongOf(undefined, '가평읍', '가평읍'), '가평읍')
+  assert.equal(dongOf('경기도 가평군 가평읍 대곡리 695', '청평면', '청평면'), '청평면')
 })
 
 test('summarizeTrades: 해제·기간 밖 제외, 정수 ㎡ 로 묶고 최신 1건', () => {

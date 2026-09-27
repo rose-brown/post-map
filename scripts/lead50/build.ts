@@ -101,6 +101,20 @@ export function jibunOf(bon: string | undefined, bu: string | undefined): string
   return s > 0 ? `${b}-${s}` : String(b)
 }
 
+/**
+ * 국토부 umdNm 표기의 법정동명. 동 지역은 "석수동", 읍·면 지역은 "가평읍 대곡리" (리까지).
+ * KB 구주소("경기도 가평군 가평읍 대곡리 695")에서 읍면동명 토큰부터 지번 앞까지를 잇는다.
+ * 구주소가 없거나 읍면동명을 못 찾으면 fallback.
+ */
+export function dongOf(oldAddress: string | undefined, eupmyeondong: string | undefined, fallback: string): string {
+  if (!oldAddress || !eupmyeondong) return fallback
+  const tokens = oldAddress.trim().split(/\s+/)
+  const i = tokens.indexOf(eupmyeondong)
+  if (i < 0) return fallback
+  const rest = tokens.slice(i, -1)   // 마지막 토큰 = 지번
+  return rest.length ? rest.join(' ') : fallback
+}
+
 /** 같은 법정동 + 같은 지번의 거래. 이름은 보지 않는다 (스펙 D12 — 이름 매칭은 오매칭을 냈다). */
 export function matchTrades(c: Complex, trades: Trade[]): Trade[] {
   if (!c.detail.jibun) return []
