@@ -46,7 +46,15 @@ current_setting('request.headers', true)::json->>'x-project-id'
 그래서 D4 의 비밀 링크를 DB 수준에서 **강제**할 수 있다. uuid 를 모르면 `select *` 를 해도 0건이므로
 `projects` 목록 열람이 막힌다. 번들에 anon key 가 공개되어도 uuid 없이는 아무것도 못 읽는다.
 
-### 미확인 — Storage 에도 같은 헤더가 전달되는지
+### 확인됨 (2026-09-27 실측) — Storage 에도 같은 헤더가 전달된다
+
+`storage.foldername(name)[1] = x-project-id` 정책이 Storage API 요청에서 동작한다. 그래서 SELECT·INSERT·DELETE
+를 모두 이 조건으로 조였다: 헤더 없는 목록 열람 `[]`, 다른 프로젝트 폴더 업로드 400·목록 `[]`·삭제 0건,
+자기 폴더 업로드·삭제 성공. 아래 "한계"의 업로드 악용은 **uuid 를 모르면 불가능**해졌다.
+또 SELECT 정책이 없으면 **삭제도 403** 이다(Storage API 가 SELECT 로 대상을 찾는다) — 원래 설계는 이 때문에 이미지 삭제가 깨져 있었다.
+읽기는 public 버킷 URL 이라 여전히 헤더와 무관하다(D9 그대로).
+
+### (당시 기록) 미확인 — Storage 에도 같은 헤더가 전달되는지
 
 Storage 정책은 `storage.objects` 에 걸고 `storage.foldername(name)[1]` 로 경로 첫 세그먼트를
 비교할 수 있다(문서 확인). 그러나 **Storage API 는 PostgREST 가 아닌 별도 서비스**라서

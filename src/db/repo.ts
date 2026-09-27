@@ -1,7 +1,7 @@
 import type { Feature, Layer, Project, StoredBlob } from '../types'
 import type { Persistable } from '../persist/persistable'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { makeAnonClient, makeClient, publicBlobUrl } from './supabase'
+import { makeClient, publicBlobUrl } from './supabase'
 import {
   featureToRow, layerToRow, projectToRow, rowToFeature, rowToLayer, rowToProject,
   type FeatureRow, type LayerRow, type ProjectRow,
@@ -224,12 +224,13 @@ export async function createProject(
   p: Persistable<Project>,
   firstLayer: Persistable<Layer>,
 ): Promise<string> {
-  const { id: _ignored, ...insert } = projectToRow(p)
-  const { data, error } = await makeAnonClient()
-    .from('projects').insert(insert).select('id').single()
-  if (error) throw error
-  const newId = (data as { id: string }).id
+  // uuid 는 클라이언트가 만든다. 헤더에 먼저 박아야 "link scoped" 정책 하나로 INSERT 가 통과한다.
+  // 서버가 만들게 하면 헤더 없는 INSERT 가 필요한데, PostgREST 의 RETURNING 이
+  // SELECT 정책(id = NULL)에 걸려 42501 이 난다 (docs/log/2026-09-27.md).
+  const newId = crypto.randomUUID()
   setActiveProject(newId)
+  const { error } = await client().from('projects').insert({ ...projectToRow(p), id: newId })
+  if (error) throw error
   const { error: le } = await client().from('layers').insert(layerToRow(firstLayer, newId))
   if (le) throw le
   return newId

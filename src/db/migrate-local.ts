@@ -34,7 +34,7 @@ export async function migrateLocalToServer(): Promise<string> {
   const layerIds = new Set(layers.map((l) => l.id))
   const features = (await db.features.toArray()).filter((f) => layerIds.has(f.layerId))
 
-  // 1) 프로젝트 + 첫 레이어. id 는 서버가 만들므로 빈 문자열로 보낸다.
+  // 1) 프로젝트 + 첫 레이어. id 는 createProject 가 만들므로 빈 문자열로 보낸다.
   const draft: Project = { ...local, id: '', updatedAt: nowIso() }
   const first: Layer = layers[0] ?? newLayer('', 0, '기본 레이어')
   const projectId = await createProject(userInput(draft), userInput({ ...first, projectId: '' }))

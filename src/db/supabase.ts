@@ -33,12 +33,6 @@ export function makeClient(projectId: string): SupabaseClient {
   })
 }
 
-/** 헤더 없는 클라이언트. 새 프로젝트 INSERT 에만 쓴다 — 그 시점에는 uuid 를 모른다. */
-export function makeAnonClient(): SupabaseClient {
-  const c = assertConfig()
-  return createClient(c.url, c.anonKey, { auth: { persistSession: false } })
-}
-
 /** 이미지 공개 URL. public 버킷이라 서명이 필요 없다 (스펙 D9). */
 export function publicBlobUrl(path: string): string {
   const c = assertConfig()

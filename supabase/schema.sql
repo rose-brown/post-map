@@ -90,21 +90,28 @@ for all to anon
 using      ( project_id = (current_setting('request.headers', true)::json->>'x-project-id')::uuid )
 with check ( project_id = (current_setting('request.headers', true)::json->>'x-project-id')::uuid );
 
--- projects INSERT 만 예외다. 새 프로젝트를 만드는 순간에는 아직 uuid 를 모르므로
--- 헤더를 보낼 수 없다. 헤더가 비어 있을 때만 허용하고, 클라이언트는 응답의 id 를
--- 즉시 헤더에 박는다 (src/db/repo.ts 의 createProject).
-create policy "create new project" on public.projects
-for insert to anon
-with check ( current_setting('request.headers', true)::json->>'x-project-id' is null );
+-- 새 프로젝트도 예외 정책이 없다. 클라이언트가 uuid 를 만들어 헤더에 먼저 박고 INSERT 한다
+-- (src/db/repo.ts 의 createProject). 헤더 없는 INSERT 정책을 두면 PostgREST 의 RETURNING 이
+-- SELECT 정책에 걸려 42501 이 난다.
 
--- Storage: public 버킷이라 읽기는 URL 을 아는 사람만 가능하다.
--- SELECT 정책을 주지 않으므로 목록 열람(list)이 막힌다 — 이것이 D9 의 전제이고,
--- 계획 Task 1 Step 4 의 (5) 에서 실제로 막히는지 확인해야 한다.
+-- Storage: public 버킷이라 읽기는 URL 을 아는 사람만 가능하다 (D9).
+-- SELECT 정책은 경로 첫 폴더가 헤더의 uuid 와 같을 때만 연다. 정책이 아예 없으면
+-- Storage API 의 삭제가 대상을 찾지 못해 403 이 난다 — 삭제에도 SELECT 가 필요하다.
+-- 헤더가 없으면 NULL 비교라 목록 열람(list)은 여전히 막힌다 (2026-09-27 실측).
 insert into storage.buckets (id, name, public) values ('blobs', 'blobs', true)
 on conflict (id) do nothing;
 
 create policy "anon upload" on storage.objects
-for insert to anon with check ( bucket_id = 'blobs' );
+for insert to anon
+with check ( bucket_id = 'blobs'
+             and (storage.foldername(name))[1] = current_setting('request.headers', true)::json->>'x-project-id' );
 
 create policy "anon delete" on storage.objects
-for delete to anon using ( bucket_id = 'blobs' );
+for delete to anon
+using ( bucket_id = 'blobs'
+        and (storage.foldername(name))[1] = current_setting('request.headers', true)::json->>'x-project-id' );
+
+create policy "link scoped read" on storage.objects
+for select to anon
+using ( bucket_id = 'blobs'
+        and (storage.foldername(name))[1] = current_setting('request.headers', true)::json->>'x-project-id' );

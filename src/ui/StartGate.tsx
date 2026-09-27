@@ -124,7 +124,7 @@ export function StartGate({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** 빈 프로젝트와 기본 레이어. id 는 서버가 만들므로 빈 문자열로 보낸다. */
+/** 빈 프로젝트와 기본 레이어. id 는 createProject 가 만들므로 빈 문자열로 보낸다. */
 async function newProject(): Promise<string> {
   const project: Project = {
     id: '',
@@ -135,7 +135,7 @@ async function newProject(): Promise<string> {
     createdAt: nowIso(),
     updatedAt: nowIso(),
   }
-  // projectId 는 서버가 발급한 값으로 createProject 안에서 채워진다.
+  // projectId 는 createProject 가 만든 uuid 로 채워진다.
   const layer = newLayer('', 0, '기본 레이어')
   return createProject(userInput(project), userInput(layer))
 }
