@@ -235,7 +235,10 @@ export function duplicateIds(complexes: Complex[]): string[] {
   return [...seen].filter(([, n]) => n > 1).map(([id]) => id)
 }
 
-/** "서울 금천구" → "금천구 ". 도형 region 속성("금천구 독산동", "화성시 동탄구 청계동")의 접두사. */
+/**
+ * "서울 금천구" → "금천구 ". 도형 region 속성("금천구 독산동", "화성시 동탄구 청계동")의 접두사.
+ * 시도를 떼므로 서울·경기 안에서만 유일하다 — 범위를 넓히면(다른 시도의 "중구" 등) region 에 시도를 넣어야 한다.
+ */
 export function regionPrefix(region: Region): string {
   return region.name.split(' ').slice(1).join(' ') + ' '
 }
