@@ -12,7 +12,7 @@
 Phase 2 는 계획만 있고 손대지 않았다.
 
 `npm test` 12개 통과 · `npm run typecheck` 통과 · `npm run build` 통과.
-커밋이 **로컬에만** 있다 (push 안 함 — 아래 2번).
+`main` 은 원격과 같다.
 
 ---
 
@@ -29,9 +29,8 @@ Phase 2 는 계획만 있고 손대지 않았다.
 
 ## 2. 그다음 남은 일 (사람 판단이 필요한 것)
 
-- **push** — 커밋이 로컬에만 있다. push 하면 CI 가 돌고 `Pages 배포` 는 아래 5번 사유로 또 실패한다.
 - **VWorld 키 재발급** (6번) — 시급.
-- CI/Pages 전환 (5번) — 키 재발급 뒤에 순서대로.
+- 재발급한 타일 키로 Actions 시크릿 교체 후 재배포 (5번).
 
 ## 3. Phase 3 에서 무엇을 했는지 (짧게)
 
@@ -58,43 +57,25 @@ PRD 의 Phase 3 을 그대로 하지 않았다. **로그인(F-80)·사람 단위
 | 계정 | `rose-brown` (gh 활성 계정) |
 | 저장소 | https://github.com/rose-brown/post-map (Public) |
 | 기본 브랜치 | `main` |
-| 배포 주소 | https://rose-brown.github.io/post-map/ (Phase 3 — `gh-pages` 의 2026-09-27 수동 배포본 `2fa17f2`) |
+| 배포 주소 | https://rose-brown.github.io/post-map/ (`main` push 시 Actions 가 배포) |
 | Supabase | `ckwgtniqpynibyjebdia` (리전 서울) |
 | 로컬 경로 | `/Volumes/nut/rs/map` |
 
 git 작성자는 이 저장소에서만 `rose-brown <h.keum.123@gmail.com>` 로 고정했다
 (전역은 `jisu_you` 로 남아 있다 — 다른 프로젝트 영향을 피했다).
 
-## 5. CI 가 실패 중이다
+## 5. CI 배포 — 동작한다 (2026-09-27 전환)
 
-빌드는 통과하고 `Pages 배포` 만 실패한다. 원인이 두 겹이다.
+`main` push → `CI · Deploy to Pages` 가 빌드하고 Pages 에 올린다. **이제 `gh-pages` 브랜치에 수동으로 올리지 마라** —
+Pages 소스가 `build_type=workflow` 라 그 브랜치는 서비스되지 않는다 (옛 배포본 보관용으로만 남아 있다).
 
-1. `github-pages` 환경의 브랜치 정책이 **`gh-pages` 만 허용**한다 (`main` 이 거부된다)
-2. Pages 소스가 아직 **`legacy`**(gh-pages 브랜치)다 — `deploy.yml` 은 `build_type=workflow` 를 요구한다
+- Actions 시크릿: `VITE_VWORLD_KEY`(현재 `.env` 의 `03125282-…` — **재발급 후 교체**), `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+- Supabase 시크릿이 비면 빌드 단계에서 `exit 1` 로 멈춘다 (앱이 시작 화면 오류가 되는 빌드로 덮어쓰지 않게)
+- `github-pages` 환경 허용 브랜치: `gh-pages`, `main`
+- 키 교체: `printf '%s' '새키' | gh secret set VITE_VWORLD_KEY -R rose-brown/post-map` (TTY 가 아니면 `--body "$K"`)
+  → `gh workflow run "CI · Deploy to Pages" -R rose-brown/post-map --ref main`
 
-그리고 `VITE_VWORLD_KEY` Actions 시크릿이 **빈 값으로 등록돼 있다.** TTY 가 아닌 곳에서
-`gh secret set` 을 돌려 stdin 이 비었기 때문이다.
-
-**순서를 지켜야 한다** — 시크릿을 먼저 넣지 않고 Pages 소스를 바꾸면 배경지도가 빈 배포본이
-정상 동작하는 현재 라이브 사이트를 덮어쓴다.
-
-```bash
-# 1) 시크릿 먼저. 새로 발급한 타일용 키를 쓴다 (6번 참조)
-printf '%s' '키' | gh secret set VITE_VWORLD_KEY -R rose-brown/post-map
-
-# 2) Pages 소스 전환
-gh api repos/rose-brown/post-map/pages -X PUT -f build_type=workflow
-
-# 3) 전환 후에도 main 이 막혀 있으면
-gh api repos/rose-brown/post-map/environments/github-pages/deployment-branch-policies \
-  -X POST -f name=main -f type=branch
-
-# 4) 재실행
-gh workflow run "CI · Deploy to Pages" -R rose-brown/post-map --ref main
-```
-
-참고: `actions/checkout@v4`·`setup-node@v4`·`upload-artifact@v4` 가 Node 20 지원 종료 경고를 낸다.
-지금은 Node 24 로 강제 실행돼 동작한다. 급하지 않지만 `@v5` 로 올리는 게 좋다.
+참고: `actions/checkout@v4`·`setup-node@v4`·`upload-artifact@v4` 가 Node 20 지원 종료 경고를 낸다. 급하지 않다.
 
 ## 6. 시급 — 공개 저장소에 VWorld 키 두 개가 노출돼 있다
 
