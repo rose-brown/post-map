@@ -58,7 +58,7 @@ PRD 의 Phase 3 을 그대로 하지 않았다. **로그인(F-80)·사람 단위
 | 계정 | `rose-brown` (gh 활성 계정) |
 | 저장소 | https://github.com/rose-brown/post-map (Public) |
 | 기본 브랜치 | `main` |
-| 배포 주소 | https://rose-brown.github.io/post-map/ (정상 — `gh-pages` 의 2026-09-22 수동 배포본) |
+| 배포 주소 | https://rose-brown.github.io/post-map/ (Phase 3 — `gh-pages` 의 2026-09-27 수동 배포본 `2fa17f2`) |
 | Supabase | `ckwgtniqpynibyjebdia` (리전 서울) |
 | 로컬 경로 | `/Volumes/nut/rs/map` |
 
