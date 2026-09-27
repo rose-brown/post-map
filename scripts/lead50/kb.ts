@@ -72,10 +72,12 @@ export async function fetchComplex(kbComplexId: string): Promise<KbComplex | nul
   const file = new URL(`complex2-${kbComplexId}.json`, CACHE)
   if (existsSync(file)) return JSON.parse(readFileSync(file, 'utf8')) as KbComplex
   const b = (await get('https://api.kbland.kr/land-complex/complex/brif', { 단지기본일련번호: kbComplexId })) as BrifRow | undefined
-  if (!b?.wgs84위도 || !b.wgs84경도) return null
+  const lat = Number(b?.wgs84위도), lng = Number(b?.wgs84경도)
+  // 문자열이 숫자가 아니면 Number() 가 NaN — 좌표 없음과 같이 취급해 [null, null] 저장을 막는다.
+  if (!b || !Number.isFinite(lat) || !Number.isFinite(lng)) return null
   const m = (await get('https://api.kbland.kr/land-complex/complex/main', { 단지기본일련번호: kbComplexId })) as MainRow | undefined
   const c: KbComplex = {
-    lat: Number(b.wgs84위도), lng: Number(b.wgs84경도), households: b.총세대수,
+    lat, lng, households: b.총세대수,
     sigungu: b.시군구명, dong: dongOf(m?.구주소, m?.읍면동명, b.법정동명), jibun: jibunOf(m?.본번지내용, m?.부번지내용), minArea: b.최소전용면적, maxArea: b.최대전용면적,
   }
   // 지번이 없으면 캐시하지 않아서 다음 실행에 재시도한다

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   SCHEMA, TRADES_BLOCK_ID, STAR_RANK, leafRegions, jibunOf, dongOf, matchTrades, summarizeTrades, formatPrice,
   recentTradeLine, tradesBlock, buildProperties, mergeSchema, mergeFeature, duplicateIds, sggCodesFor, rankIcon,
+  regionPrefix, dropStars,
 } from '../scripts/lead50/build.ts'
 import type { Complex, Trade } from '../scripts/lead50/build.ts'
 import type { FeatureRow } from '../src/db/mappers.ts'
@@ -191,4 +192,39 @@ test('parseMolitXml: 금액 쉼표·해제·날짜 패딩', () => {
 
 test('recentMonths: 연도 경계를 넘는다', () => {
   assert.deepEqual(recentMonths(new Date(2026, 1, 15), 3), ['202602', '202601', '202512'])
+})
+
+test('jibunOf: 부번이 숫자가 아니면 빈 지번', () => {
+  assert.equal(jibunOf('484', '가'), '')
+  assert.equal(jibunOf('484', '0'), '484')
+  assert.equal(jibunOf('484', ''), '484')
+})
+
+test('regionPrefix: 시도를 떼고 공백으로 끝난다', () => {
+  assert.equal(regionPrefix({ code: '1154500000', name: '서울 금천구' }), '금천구 ')
+  assert.equal(regionPrefix({ code: '4111300000', name: '경기 수원시 권선구' }), '수원시 권선구 ')
+})
+
+test('dropStars: 수집한 지역에서 순위에 없는 ★ 만 뗀다', () => {
+  const row = (id: string, region: string, icon?: string): FeatureRow => ({
+    id: 'f' + id, project_id: 'P', layer_id: 'L', parent_id: null,
+    geometry: { type: 'Point', coordinates: [0, 0] }, title: id,
+    properties: { kbComplexId: id, region, ...(icon ? { icon } : {}), memo: 'm' },
+    blocks: [], derived_from: null, created_at: 'C', updated_at: 'U',
+  })
+  const existing = [
+    row('1', '금천구 독산동', 'star'),     // 수집 지역, 순위 밖, ★ → 뗀다
+    row('2', '금천구 시흥동', 'star'),     // 수집 지역, 순위 안 → 그대로
+    row('3', '구로구 신도림동', 'star'),   // 수집 안 한 지역 → 그대로
+    row('4', '금천구 가산동', 'home'),     // 사용자 아이콘 → 그대로
+    row('5', '화성시 동탄구 청계동', 'star'), // 화성시 수집, 순위 밖 → 뗀다
+  ]
+  const out = dropStars(existing, new Set(['2']), [
+    { code: '1154500000', name: '서울 금천구' }, { code: '4159000000', name: '경기 화성시' },
+  ], 'NOW')
+  assert.deepEqual(out.map((f) => f.id), ['f1', 'f5'])
+  assert.equal('icon' in out[0].properties, false)
+  assert.equal(out[0].properties.memo, 'm')
+  assert.equal(out[0].updated_at, 'NOW')
+  assert.equal(out[0].created_at, 'C')
 })
