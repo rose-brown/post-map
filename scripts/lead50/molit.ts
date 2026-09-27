@@ -44,7 +44,7 @@ export async function fetchTrades(sgg: string, ym: string, key: string, refresh:
     const r = await fetch(u)
     const xml = await r.text()
     const p = parseMolitXml(xml)
-    // 정상 코드는 Task 1 실측값. 한도 초과·키 오류는 여기서 멈춘다 (스펙 5절).
+    // 실측된 정상 코드는 '000' (Task 1). '00' 은 미실측 — 문서상 가능성만 있어 방어로 남겨 뒀다. 한도 초과·키 오류는 여기서 멈춘다 (스펙 5절).
     if (r.status !== 200 || !['00', '000'].includes(p.resultCode)) {
       throw new Error(`MOLIT ${r.status} resultCode=${p.resultCode || '?'} sgg=${sgg} ym=${ym}`)
     }
