@@ -29,8 +29,7 @@ Phase 2 는 계획만 있고 손대지 않았다.
 
 ## 2. 그다음 남은 일 (사람 판단이 필요한 것)
 
-- **VWorld 키 재발급** (6번) — 시급.
-- 재발급한 타일 키로 Actions 시크릿 교체 후 재배포 (5번).
+- 없음. Phase 3 는 닫혔다. 다음은 Phase 2 (`docs/prompts/03-Phase2-...`).
 
 ## 3. Phase 3 에서 무엇을 했는지 (짧게)
 
@@ -69,7 +68,7 @@ git 작성자는 이 저장소에서만 `rose-brown <h.keum.123@gmail.com>` 로 
 `main` push → `CI · Deploy to Pages` 가 빌드하고 Pages 에 올린다. **이제 `gh-pages` 브랜치에 수동으로 올리지 마라** —
 Pages 소스가 `build_type=workflow` 라 그 브랜치는 서비스되지 않는다 (옛 배포본 보관용으로만 남아 있다).
 
-- Actions 시크릿: `VITE_VWORLD_KEY`(현재 `.env` 의 `03125282-…` — **재발급 후 교체**), `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+- Actions 시크릿: `VITE_VWORLD_KEY`(`.env` 의 `03125282-…`), `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
 - Supabase 시크릿이 비면 빌드 단계에서 `exit 1` 로 멈춘다 (앱이 시작 화면 오류가 되는 빌드로 덮어쓰지 않게)
 - `github-pages` 환경 허용 브랜치: `gh-pages`, `main`
 - 키 교체: `printf '%s' '새키' | gh secret set VITE_VWORLD_KEY -R rose-brown/post-map` (TTY 가 아니면 `--body "$K"`)
@@ -77,9 +76,11 @@ Pages 소스가 `build_type=workflow` 라 그 브랜치는 서비스되지 않�
 
 참고: `actions/checkout@v4`·`setup-node@v4`·`upload-artifact@v4` 가 Node 20 지원 종료 경고를 낸다. 급하지 않다.
 
-## 6. 시급 — 공개 저장소에 VWorld 키 두 개가 노출돼 있다
+## 6. VWorld 키 — 노출된 키를 그대로 쓰기로 했다 (2026-09-27 사용자 결정)
 
-**재발급이 필요하다. 파일 수정으로는 회수되지 않는다** (git 히스토리와 배포 번들에 남는다).
+두 키가 공개 저장소에 노출돼 있다 (git 히스토리·배포 번들). **재발급하지 않고 유지한다.**
+감수한 것: 제3자가 키를 가져가 쿼터를 소진하거나 다른 도메인에서 쓸 수 있다. 증상이 보이면(배경지도·검색 실패)
+그때 재발급하고 5번의 명령으로 시크릿을 교체한다. 다시 권하지 마라.
 
 | 키 | 남아 있는 위치 |
 |---|---|
