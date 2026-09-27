@@ -56,11 +56,13 @@ export interface KbComplex {
   households?: number
   sigungu: string
   dong: string
+  /** 부번 0 이면 본번만 ("484"), 아니면 "본번-부번" ("1053-3"). 국토부 jibun 과 같은 표기. */
+  jibun: string
   minArea?: string
   maxArea?: string
 }
 /** price 는 만원. ymd 는 YYYY-MM-DD. */
-export interface Trade { dong: string; aptName: string; area: number; price: number; ymd: string; floor: string; cancelled: boolean }
+export interface Trade { dong: string; jibun: string; aptName: string; area: number; price: number; ymd: string; floor: string; cancelled: boolean }
 export interface Complex { region: Region; item: KbRankItem; detail: KbComplex }
 export interface AreaGroup { area: number; count: number; latest: Trade }
 
@@ -79,22 +81,18 @@ export function sggCodesFor(region: Region): string[] {
   return SGG_CODES_OVERRIDE[region.code] ?? [region.code.slice(0, 5)]
 }
 
-export function normalizeName(s: string): string {
-  return s.toLowerCase().replace(/[\s()（）[\]·.,-]/g, '').replace(/(아파트|apt)$/, '')
+/** KB 본번·부번 → 국토부 jibun 표기. 본번이 없으면 '' (매칭되지 않는다). */
+export function jibunOf(bon: string | undefined, bu: string | undefined): string {
+  const b = Number(bon)
+  if (!bon || !Number.isFinite(b) || b <= 0) return ''
+  const s = Number(bu ?? 0)
+  return s > 0 ? `${b}-${s}` : String(b)
 }
 
-/** 같은 동에서 정규화 이름이 같으면 exact. 아니면 포함 관계 후보 이름이 정확히 하나일 때만 contains. */
-export function matchTrades(c: Complex, trades: Trade[]): { how: 'exact' | 'contains' | 'none'; trades: Trade[] } {
-  const target = normalizeName(c.item.aptName)
-  const inDong = trades.filter((x) => x.dong === c.detail.dong)
-  const exact = inDong.filter((x) => normalizeName(x.aptName) === target)
-  if (exact.length) return { how: 'exact', trades: exact }
-  const names = new Set(
-    inDong.map((x) => normalizeName(x.aptName)).filter((n) => n.includes(target) || target.includes(n)),
-  )
-  if (names.size !== 1) return { how: 'none', trades: [] }
-  const [only] = names
-  return { how: 'contains', trades: inDong.filter((x) => normalizeName(x.aptName) === only) }
+/** 같은 법정동 + 같은 지번의 거래. 이름은 보지 않는다 (스펙 D12 — 이름 매칭은 오매칭을 냈다). */
+export function matchTrades(c: Complex, trades: Trade[]): Trade[] {
+  if (!c.detail.jibun) return []
+  return trades.filter((x) => x.dong === c.detail.dong && x.jibun === c.detail.jibun)
 }
 
 /** 해제 거래와 since 이전을 빼고 정수 ㎡ 로 묶어 평형별 최신 1건. 면적 오름차순. */

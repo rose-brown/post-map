@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  SCHEMA, TRADES_BLOCK_ID, leafRegions, normalizeName, matchTrades, summarizeTrades, formatPrice,
+  SCHEMA, TRADES_BLOCK_ID, leafRegions, jibunOf, matchTrades, summarizeTrades, formatPrice,
   recentTradeLine, tradesBlock, buildProperties, mergeSchema, mergeFeature, duplicateIds, sggCodesFor,
 } from '../scripts/lead50/build.ts'
 import type { Complex, Trade } from '../scripts/lead50/build.ts'
@@ -9,12 +9,12 @@ import type { FeatureRow } from '../src/db/mappers.ts'
 import { parseMolitXml, recentMonths } from '../scripts/lead50/molit.ts'
 
 const t = (p: Partial<Trade>): Trade => ({
-  dong: '호계동', aptName: '평촌어바인퍼스트', area: 84.6, price: 100000, ymd: '2026-08-01', floor: '10', cancelled: false, ...p,
+  dong: '호계동', aptName: '평촌어바인퍼스트', area: 84.6, price: 100000, ymd: '2026-08-01', floor: '10', cancelled: false, jibun: '1296', ...p,
 })
 const complex = (p: Partial<Complex['item']> = {}): Complex => ({
   region: { code: '4117300000', name: '경기 안양시 동안구' },
   item: { rank: 2, kbComplexId: '41747', aptName: '평촌어바인퍼스트', generalHouseholds: 3661, completion: '21년 01월 (6년차)', pricePerPyeong: 3572, marketCap: '3.56조', baseMonth: '202609', ...p },
-  detail: { lat: 37.37260921234, lng: 126.95605181234, households: 3850, sigungu: '안양시 동안구', dong: '호계동', minArea: '39.26', maxArea: '84.60' },
+  detail: { lat: 37.37260921234, lng: 126.95605181234, households: 3850, sigungu: '안양시 동안구', dong: '호계동', jibun: '1296', minArea: '39.26', maxArea: '84.60' },
 })
 
 test('leafRegions: 하위 구가 있는 시는 빼고, 화성 신설 구는 화성시로 대체한다', () => {
@@ -33,25 +33,29 @@ test('leafRegions: 하위 구가 있는 시는 빼고, 화성 신설 구는 화�
   ])
 })
 
-test('normalizeName: 공백·괄호·아파트 접미사를 지우고 괄호 안 글자는 남긴다', () => {
-  assert.equal(normalizeName('목련(우성7단지)'), '목련우성7단지')
-  assert.equal(normalizeName('평촌 어바인퍼스트 아파트'), '평촌어바인퍼스트')
-  assert.equal(normalizeName('석수LG빌리지APT'), '석수lg빌리지')
-  assert.notEqual(normalizeName('목련(두산)'), normalizeName('목련(신동아)'))
+test('matchTrades: 같은 동 + 같은 지번만, 이름은 보지 않는다', () => {
+  const c = complex()   // detail.dong '호계동', detail.jibun '1296'
+  const r = matchTrades(c, [
+    t({ jibun: '1296', aptName: '완전히다른이름' }),
+    t({ jibun: '1296', dong: '평촌동' }),
+    t({ jibun: '1296-1' }),
+  ])
+  assert.equal(r.length, 1)
+  assert.equal(r[0].aptName, '완전히다른이름')
 })
 
-test('matchTrades: 같은 동 + 정규화 이름 일치', () => {
-  const r = matchTrades(complex(), [t({}), t({ aptName: '다른단지' }), t({ dong: '평촌동' })])
-  assert.equal(r.how, 'exact')
-  assert.equal(r.trades.length, 1)
+test('matchTrades: KB 지번이 비어 있으면 매칭하지 않는다', () => {
+  const c = complex()
+  c.detail.jibun = ''
+  assert.deepEqual(matchTrades(c, [t({ jibun: '' })]), [])
 })
 
-test('matchTrades: 포함 관계는 후보 이름이 하나일 때만 쓴다', () => {
-  const one = matchTrades(complex(), [t({ aptName: '평촌어바인퍼스트1단지' })])
-  assert.equal(one.how, 'contains')
-  const two = matchTrades(complex(), [t({ aptName: '평촌어바인퍼스트1단지' }), t({ aptName: '평촌어바인퍼스트2단지' })])
-  assert.equal(two.how, 'none')
-  assert.equal(two.trades.length, 0)
+test('jibunOf: 부번 0 은 본번만, 앞자리 0 제거, 본번 없으면 빈 문자열', () => {
+  assert.equal(jibunOf('484', '0'), '484')
+  assert.equal(jibunOf('1053', '3'), '1053-3')
+  assert.equal(jibunOf('0075', '0002'), '75-2')
+  assert.equal(jibunOf(undefined, '0'), '')
+  assert.equal(jibunOf('', undefined), '')
 })
 
 test('summarizeTrades: 해제·기간 밖 제외, 정수 ㎡ 로 묶고 최신 1건', () => {
@@ -145,15 +149,15 @@ test('sggCodesFor: 앞 5자리, 화성시는 신설 구 코드 4개', () => {
 
 test('parseMolitXml: 금액 쉼표·해제·날짜 패딩', () => {
   const xml = `<response><header><resultCode>000</resultCode></header><body><items>
-    <item><aptNm>평촌어바인퍼스트</aptNm><umdNm>호계동</umdNm><excluUseAr>84.6</excluUseAr><dealAmount> 151,000</dealAmount>
+    <item><aptNm>평촌어바인퍼스트</aptNm><umdNm>호계동</umdNm><jibun>1296</jibun><excluUseAr>84.6</excluUseAr><dealAmount> 151,000</dealAmount>
     <dealYear>2026</dealYear><dealMonth>8</dealMonth><dealDay>3</dealDay><floor>12</floor><cdealType></cdealType></item>
-    <item><aptNm>평촌어바인퍼스트</aptNm><umdNm>호계동</umdNm><excluUseAr>59.9</excluUseAr><dealAmount>90,000</dealAmount>
+    <item><aptNm>평촌어바인퍼스트</aptNm><umdNm>호계동</umdNm><jibun>1296</jibun><excluUseAr>59.9</excluUseAr><dealAmount>90,000</dealAmount>
     <dealYear>2026</dealYear><dealMonth>7</dealMonth><dealDay>21</dealDay><floor>3</floor><cdealType>O</cdealType></item>
   </items><totalCount>2</totalCount></body></response>`
   const p = parseMolitXml(xml)
   assert.equal(p.resultCode, '000')
   assert.equal(p.totalCount, 2)
-  assert.deepEqual(p.trades[0], { dong: '호계동', aptName: '평촌어바인퍼스트', area: 84.6, price: 151000, ymd: '2026-08-03', floor: '12', cancelled: false })
+  assert.deepEqual(p.trades[0], { dong: '호계동', aptName: '평촌어바인퍼스트', jibun: '1296', area: 84.6, price: 151000, ymd: '2026-08-03', floor: '12', cancelled: false })
   assert.equal(p.trades[1].cancelled, true)
 })
 

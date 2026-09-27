@@ -15,6 +15,7 @@ const tag = (s: string, name: string) => s.match(new RegExp(`<${name}>([^<]*)</$
 export function parseMolitXml(xml: string): { resultCode: string; totalCount: number; trades: Trade[] } {
   const trades = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(([, it]) => ({
     dong: tag(it, 'umdNm'),
+    jibun: tag(it, 'jibun'),
     aptName: tag(it, 'aptNm'),
     area: Number(tag(it, 'excluUseAr')),
     price: Number(tag(it, 'dealAmount').replace(/,/g, '')),
@@ -34,7 +35,8 @@ export function recentMonths(now: Date, n: number): string[] {
 
 export async function fetchTrades(sgg: string, ym: string, key: string, refresh: boolean): Promise<Trade[]> {
   mkdirSync(CACHE, { recursive: true })
-  const file = new URL(`molit-${sgg}-${ym}.json`, CACHE)
+  // molit2-: 옛 캐시(molit-*)에는 jibun 이 없다.
+  const file = new URL(`molit2-${sgg}-${ym}.json`, CACHE)
   if (!refresh && existsSync(file)) return JSON.parse(readFileSync(file, 'utf8')) as Trade[]
   const all: Trade[] = []
   for (let page = 1; ; page++) {

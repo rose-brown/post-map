@@ -38,7 +38,7 @@ async function sb(path: string, init: RequestInit = {}): Promise<unknown> {
 }
 
 /* ---------- 1. 수집 (쓰기 없음) ---------- */
-const report = { regions: 0, failedRegions: [] as string[], complexes: 0, noCoord: [] as string[], unmatched: [] as string[], contains: 0 }
+const report = { regions: 0, failedRegions: [] as string[], complexes: 0, noCoord: [] as string[], unmatched: [] as string[] }
 let regions = await fetchRegions()
 if (only) regions = regions.filter((r) => only.has(r.code))
 report.regions = regions.length
@@ -76,10 +76,9 @@ for (const sgg of new Set(regions.flatMap(sggCodesFor))) {
 /* ---------- 2. 계산 ---------- */
 const built = complexes.map((c) => {
   const pool = sggCodesFor(c.region).flatMap((s) => tradesBySgg.get(s) ?? [])
-  const m = matchTrades(c, pool)
-  if (m.how === 'none') report.unmatched.push(`${c.region.name} ${c.item.aptName} (${c.detail.dong})`)
-  if (m.how === 'contains') report.contains++
-  const groups = summarizeTrades(m.trades, since)
+  const matched = matchTrades(c, pool)
+  if (!matched.length) report.unmatched.push(`${c.region.name} ${c.item.aptName} (${c.detail.dong} ${c.detail.jibun || '지번 없음'})`)
+  const groups = summarizeTrades(matched, since)
   return { c, props: buildProperties(c, groups), block: tradesBlock(groups) }
 })
 
