@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  SCHEMA, TRADES_BLOCK_ID, leafRegions, jibunOf, matchTrades, summarizeTrades, formatPrice,
-  recentTradeLine, tradesBlock, buildProperties, mergeSchema, mergeFeature, duplicateIds, sggCodesFor,
+  SCHEMA, TRADES_BLOCK_ID, STAR_RANK, leafRegions, jibunOf, matchTrades, summarizeTrades, formatPrice,
+  recentTradeLine, tradesBlock, buildProperties, mergeSchema, mergeFeature, duplicateIds, sggCodesFor, rankIcon,
 } from '../scripts/lead50/build.ts'
 import type { Complex, Trade } from '../scripts/lead50/build.ts'
 import type { FeatureRow } from '../src/db/mappers.ts'
@@ -126,7 +126,7 @@ test('mergeFeature: 사용자 속성·블록 보존, 우리 키와 거래 블록
   assert.equal(row.created_at, '2026-09-01T00:00:00.000Z')
   assert.equal(row.updated_at, '2026-10-01T00:00:00.000Z')
   assert.equal(row.title, '평촌어바인퍼스트')
-  assert.deepEqual(row.properties, { memo: '임장함', rank: 2 })
+  assert.deepEqual(row.properties, { memo: '임장함', rank: 2, icon: 'star' })
   assert.deepEqual(row.blocks.map((b) => [b.id, b.text]), [[TRADES_BLOCK_ID, '새'], ['blk_user', '내 메모']])
   assert.deepEqual(row.geometry, { type: 'Point', coordinates: [126.9560518, 37.3726092] })
 })
@@ -136,6 +136,7 @@ test('mergeFeature: 새 도형은 newId, 거래가 없으면 거래 블록을 �
   assert.equal(row.id, 'ftr_new')
   assert.equal(row.created_at, 'N')
   assert.deepEqual(row.blocks, [])
+  assert.equal(row.properties.icon, 'star')
 })
 
 test('duplicateIds: 지역 간 중복 단지를 찾는다', () => {
@@ -145,6 +146,25 @@ test('duplicateIds: 지역 간 중복 단지를 찾는다', () => {
 test('sggCodesFor: 앞 5자리, 화성시는 신설 구 코드 4개', () => {
   assert.deepEqual(sggCodesFor({ code: '4117300000', name: '경기 안양시 동안구' }), ['41173'])
   assert.deepEqual(sggCodesFor({ code: '4159000000', name: '경기 화성시' }), ['41591', '41593', '41595', '41597'])
+})
+
+test('rankIcon: Top 10 은 ★, 밖으로 밀리면 ★ 만 뗀다, 사용자 아이콘은 보존', () => {
+  assert.equal(STAR_RANK, 10)
+  assert.equal(rankIcon(undefined, 1), 'star')
+  assert.equal(rankIcon('dot', 10), 'star')
+  assert.equal(rankIcon('star', 3), 'star')
+  assert.equal(rankIcon('home', 3), 'home')
+  assert.equal(rankIcon('star', 11), undefined)
+  assert.equal(rankIcon(undefined, 30), undefined)
+  assert.equal(rankIcon('flag', 30), 'flag')
+})
+
+test('mergeFeature: 순위에 따라 ★ 를 붙이고 뗀다', () => {
+  const top = mergeFeature({ c: complex({ rank: 3 }), props: {}, layerId: 'L', projectId: 'P', now: 'N', newId: 'n' })
+  assert.equal(top.properties.icon, 'star')
+  const existing = mergeFeature({ c: complex({ rank: 3 }), props: {}, layerId: 'L', projectId: 'P', now: 'N', newId: 'n' })
+  const dropped = mergeFeature({ existing, c: complex({ rank: 25 }), props: {}, layerId: 'L', projectId: 'P', now: 'N2', newId: 'x' })
+  assert.equal('icon' in dropped.properties, false)
 })
 
 test('parseMolitXml: 금액 쉼표·해제·날짜 패딩', () => {
