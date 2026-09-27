@@ -78,6 +78,7 @@ export async function fetchComplex(kbComplexId: string): Promise<KbComplex | nul
     lat: Number(b.wgs84위도), lng: Number(b.wgs84경도), households: b.총세대수,
     sigungu: b.시군구명, dong: b.법정동명, jibun: jibunOf(m?.본번지내용, m?.부번지내용), minArea: b.최소전용면적, maxArea: b.최대전용면적,
   }
-  writeFileSync(file, JSON.stringify(c))
+  // 지번이 없으면 캐시하지 않아서 다음 실행에 재시도한다
+  if (c.jibun) writeFileSync(file, JSON.stringify(c))
   return c
 }

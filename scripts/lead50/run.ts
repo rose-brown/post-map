@@ -17,7 +17,15 @@ import type { FeatureRow, LayerRow } from '../../src/db/mappers.ts'
 
 const args = process.argv.slice(2)
 const projectId = args[0]
-const only = args.includes('--only') ? new Set(args[args.indexOf('--only') + 1].split(',')) : null
+let only: Set<string> | null = null
+if (args.includes('--only')) {
+  const idx = args.indexOf('--only') + 1
+  if (idx >= args.length || args[idx].startsWith('--')) {
+    console.error('usage: node scripts/lead50/run.ts <projectId> [--only codes] [--dry-run]')
+    process.exit(2)
+  }
+  only = new Set(args[idx].split(','))
+}
 const dryRun = args.includes('--dry-run')
 if (!projectId || !/^[0-9a-f-]{36}$/.test(projectId)) {
   console.error('usage: node scripts/lead50/run.ts <projectId> [--only codes] [--dry-run]')
@@ -41,6 +49,9 @@ async function sb(path: string, init: RequestInit = {}): Promise<unknown> {
 const report = { regions: 0, failedRegions: [] as string[], complexes: 0, noCoord: [] as string[], unmatched: [] as string[] }
 let regions = await fetchRegions()
 if (only) regions = regions.filter((r) => only.has(r.code))
+if (only && regions.length === 0) {
+  throw new Error(`--only 에 맞는 지역이 없다: ${Array.from(only).join(',')}`)
+}
 report.regions = regions.length
 
 const complexes: Complex[] = []
