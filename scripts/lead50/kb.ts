@@ -4,7 +4,7 @@
  * 지번(본번·부번)은 complex/brif 가 아니라 complex/main 응답에 있다.
  */
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
-import { leafRegions, jibunOf } from './build.ts'
+import { leafRegions, jibunOf, dongOf } from './build.ts'
 import type { KbAreaRow, KbComplex, KbRankItem, Region } from './build.ts'
 
 const CACHE = new URL('./.cache/', import.meta.url)
@@ -63,7 +63,7 @@ interface BrifRow {
   wgs84위도?: string; wgs84경도?: string; 총세대수?: number; 시군구명: string; 법정동명: string
   최소전용면적?: string; 최대전용면적?: string
 }
-interface MainRow { 본번지내용?: string; 부번지내용?: string }
+interface MainRow { 본번지내용?: string; 부번지내용?: string; 읍면동명?: string; 구주소?: string }
 
 /** 좌표는 바뀌지 않으므로 id 별 영구 캐시. 좌표가 없으면 null (캐시하지 않는다). */
 export async function fetchComplex(kbComplexId: string): Promise<KbComplex | null> {
@@ -76,7 +76,7 @@ export async function fetchComplex(kbComplexId: string): Promise<KbComplex | nul
   const m = (await get('https://api.kbland.kr/land-complex/complex/main', { 단지기본일련번호: kbComplexId })) as MainRow | undefined
   const c: KbComplex = {
     lat: Number(b.wgs84위도), lng: Number(b.wgs84경도), households: b.총세대수,
-    sigungu: b.시군구명, dong: b.법정동명, jibun: jibunOf(m?.본번지내용, m?.부번지내용), minArea: b.최소전용면적, maxArea: b.최대전용면적,
+    sigungu: b.시군구명, dong: dongOf(m?.구주소, m?.읍면동명, b.법정동명), jibun: jibunOf(m?.본번지내용, m?.부번지내용), minArea: b.최소전용면적, maxArea: b.최대전용면적,
   }
   // 지번이 없으면 캐시하지 않아서 다음 실행에 재시도한다
   if (c.jibun) writeFileSync(file, JSON.stringify(c))
