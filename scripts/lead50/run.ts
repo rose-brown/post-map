@@ -7,10 +7,10 @@
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import {
-  LAYER_NAME, buildProperties, duplicateIds, matchTrades, mergeFeature, mergeSchema, sggCodesFor,
+  LAYER_NAME, buildProperties, dropStars, duplicateIds, matchTrades, mergeFeature, mergeSchema, sggCodesFor,
   summarizeTrades, tradesBlock,
 } from './build.ts'
-import type { Complex, KbRankItem, Trade } from './build.ts'
+import type { Complex, KbRankItem, Region, Trade } from './build.ts'
 import { KbHttpError, fetchComplex, fetchRanking, fetchRegions } from './kb.ts'
 import { fetchTrades, recentMonths } from './molit.ts'
 import type { FeatureRow, LayerRow } from '../../src/db/mappers.ts'
@@ -55,6 +55,7 @@ if (only && regions.length === 0) {
 report.regions = regions.length
 
 const complexes: Complex[] = []
+const collected: Region[] = []
 for (const region of regions) {
   let items: KbRankItem[]
   try {
@@ -63,6 +64,10 @@ for (const region of regions) {
     if (e instanceof KbHttpError && e.status === 500) { report.failedRegions.push(`${region.name} (500)`); continue }
     throw e
   }
+  if (items.length === 0) {
+    throw new Error(`${region.name}: KB 순위가 0건이다 — 응답 형식이 바뀌었는지 확인하라`)
+  }
+  collected.push(region)
   for (const item of items) {
     const detail = await fetchComplex(item.kbComplexId)
     if (!detail) { report.noCoord.push(`${region.name} ${item.aptName}`); continue }
@@ -115,8 +120,10 @@ const rows = built.map(({ c, props, block }) => mergeFeature({
   existing: byKbId.get(c.item.kbComplexId), c, props, block, layerId, projectId, now, newId: `ftr_${randomUUID().slice(0, 12)}`,
 }))
 const created = rows.filter((r) => !byKbId.has(String(r.properties.kbComplexId))).length
+const seen = new Set(rows.map((r) => String(r.properties.kbComplexId)))
+const unstarred = dropStars(existing, seen, collected, now)
 
-console.log(JSON.stringify({ ...report, unmatchedCount: report.unmatched.length, created, updated: rows.length - created, dryRun }, null, 2))
+console.log(JSON.stringify({ ...report, unmatchedCount: report.unmatched.length, created, updated: rows.length - created, unstarred: unstarred.length, dryRun }, null, 2))
 if (dryRun) process.exit(0)
 
 if (!layer) {
@@ -129,11 +136,12 @@ if (!layer) {
 } else {
   await sb(`layers?id=eq.${layer.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ schema: mergeSchema(layer.schema) }) })
 }
-for (let i = 0; i < rows.length; i += 500) {
+const writeRows = [...rows, ...unstarred]
+for (let i = 0; i < writeRows.length; i += 500) {
   await sb('features', {
     method: 'POST',
     headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify(rows.slice(i, i + 500)),
+    body: JSON.stringify(writeRows.slice(i, i + 500)),
   })
 }
-console.error(`기록 완료: ${rows.length}행 (신규 ${created})`)
+console.error(`기록 완료: ${writeRows.length}행 (신규 ${created}, ★ 해제 ${unstarred.length})`)

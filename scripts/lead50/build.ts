@@ -93,11 +93,13 @@ export function rankIcon(current: unknown, rank: number): string | undefined {
   return current === undefined ? undefined : String(current)
 }
 
-/** KB 본번·부번 → 국토부 jibun 표기. 본번이 없으면 '' (매칭되지 않는다). */
+/** KB 본번·부번 → 국토부 jibun 표기. 본번이 없으면 '' (매칭되지 않는다). 부번이 있는데 숫자가 아니면 '' (이웃 필지 오매칭 방지). */
 export function jibunOf(bon: string | undefined, bu: string | undefined): string {
   const b = Number(bon)
   if (!bon || !Number.isFinite(b) || b <= 0) return ''
-  const s = Number(bu ?? 0)
+  if (bu === undefined || bu === '') return String(b)
+  const s = Number(bu)
+  if (!Number.isFinite(s)) return ''
   return s > 0 ? `${b}-${s}` : String(b)
 }
 
@@ -182,7 +184,10 @@ export function buildProperties(c: Complex, groups: AreaGroup[]): Properties {
   return out
 }
 
-/** D7: 우리 필드를 스펙 순서로 앞에 (사용자가 고친 라벨 유지), 사용자 필드는 뒤에 그대로. */
+/**
+ * D7: 우리 필드를 스펙 순서로 앞에 — 우리 키의 필드는 기존 필드 객체를 통째로 유지 (사용자가 고친 라벨·단위 등),
+ * 사용자 필드는 뒤에 그대로. 그 결과 SCHEMA 의 단위·타입을 바꿔도 기존 레이어에는 반영되지 않는다.
+ */
 export function mergeSchema(existing: PropertySchemaField[]): PropertySchemaField[] {
   return [
     ...SCHEMA.map((f) => existing.find((e) => e.key === f.key) ?? f),
@@ -228,4 +233,26 @@ export function duplicateIds(complexes: Complex[]): string[] {
   const seen = new Map<string, number>()
   for (const c of complexes) seen.set(c.item.kbComplexId, (seen.get(c.item.kbComplexId) ?? 0) + 1)
   return [...seen].filter(([, n]) => n > 1).map(([id]) => id)
+}
+
+/** "서울 금천구" → "금천구 ". 도형 region 속성("금천구 독산동", "화성시 동탄구 청계동")의 접두사. */
+export function regionPrefix(region: Region): string {
+  return region.name.split(' ').slice(1).join(' ') + ' '
+}
+
+/**
+ * 이번 실행에서 수집한 지역(`regions`)에 속하는데 이번 순위에 없는(`seenIds` 밖) 기존 도형 중
+ * 아이콘이 ★ 인 것 — ★ 만 뗀 행을 돌려준다. 다른 속성·블록·시각은 그대로 (updated_at 만 now).
+ */
+export function dropStars(existing: FeatureRow[], seenIds: Set<string>, regions: Region[], now: string): FeatureRow[] {
+  const prefixes = regions.map(regionPrefix)
+  return existing
+    .filter((f) => f.properties.icon === STAR_ICON)
+    .filter((f) => !seenIds.has(String(f.properties.kbComplexId ?? '')))
+    .filter((f) => prefixes.some((p) => String(f.properties.region ?? '').startsWith(p)))
+    .map((f) => {
+      const properties = { ...f.properties }
+      delete properties.icon
+      return { ...f, properties, updated_at: now }
+    })
 }
