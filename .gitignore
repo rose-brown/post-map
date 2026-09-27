@@ -7,3 +7,4 @@ dist
 node_modules/.tmp
 .playwright-mcp
 *.local
+scripts/lead50/.cache/

@@ -33,8 +33,10 @@ const KB_BROKEN_CHILDREN: Record<string, string[]> = {
   '4159000000': ['4159100000', '4159300000', '4159500000', '4159700000'],
 }
 
-/** 국토부 LAWD_CD 가 법정동코드 앞 5자리와 다른 지역. Task 1 Step 5 실측으로 채운다. */
-export const SGG_CODES_OVERRIDE: Record<string, string[]> = {}
+/** 국토부 LAWD_CD 가 법정동코드 앞 5자리와 다른 지역. 화성시는 2026 신설 구 코드로만 거래가 나온다 (스펙 3.1, 41590 은 0건). */
+export const SGG_CODES_OVERRIDE: Record<string, string[]> = {
+  '4159000000': ['41591', '41593', '41595', '41597'],
+}
 
 export interface Region { code: string; name: string }
 export interface KbAreaRow { 법정동코드: string; 시군구명: string; 하위시군구존재여부: string }

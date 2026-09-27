@@ -2,10 +2,11 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   SCHEMA, TRADES_BLOCK_ID, leafRegions, normalizeName, matchTrades, summarizeTrades, formatPrice,
-  recentTradeLine, tradesBlock, buildProperties, mergeSchema, mergeFeature, duplicateIds,
+  recentTradeLine, tradesBlock, buildProperties, mergeSchema, mergeFeature, duplicateIds, sggCodesFor,
 } from '../scripts/lead50/build.ts'
 import type { Complex, Trade } from '../scripts/lead50/build.ts'
 import type { FeatureRow } from '../src/db/mappers.ts'
+import { parseMolitXml, recentMonths } from '../scripts/lead50/molit.ts'
 
 const t = (p: Partial<Trade>): Trade => ({
   dong: '호계동', aptName: '평촌어바인퍼스트', area: 84.6, price: 100000, ymd: '2026-08-01', floor: '10', cancelled: false, ...p,
@@ -135,4 +136,27 @@ test('mergeFeature: 새 도형은 newId, 거래가 없으면 거래 블록을 �
 
 test('duplicateIds: 지역 간 중복 단지를 찾는다', () => {
   assert.deepEqual(duplicateIds([complex(), complex({ rank: 1 }), complex({ kbComplexId: '1' })]), ['41747'])
+})
+
+test('sggCodesFor: 앞 5자리, 화성시는 신설 구 코드 4개', () => {
+  assert.deepEqual(sggCodesFor({ code: '4117300000', name: '경기 안양시 동안구' }), ['41173'])
+  assert.deepEqual(sggCodesFor({ code: '4159000000', name: '경기 화성시' }), ['41591', '41593', '41595', '41597'])
+})
+
+test('parseMolitXml: 금액 쉼표·해제·날짜 패딩', () => {
+  const xml = `<response><header><resultCode>000</resultCode></header><body><items>
+    <item><aptNm>평촌어바인퍼스트</aptNm><umdNm>호계동</umdNm><excluUseAr>84.6</excluUseAr><dealAmount> 151,000</dealAmount>
+    <dealYear>2026</dealYear><dealMonth>8</dealMonth><dealDay>3</dealDay><floor>12</floor><cdealType></cdealType></item>
+    <item><aptNm>평촌어바인퍼스트</aptNm><umdNm>호계동</umdNm><excluUseAr>59.9</excluUseAr><dealAmount>90,000</dealAmount>
+    <dealYear>2026</dealYear><dealMonth>7</dealMonth><dealDay>21</dealDay><floor>3</floor><cdealType>O</cdealType></item>
+  </items><totalCount>2</totalCount></body></response>`
+  const p = parseMolitXml(xml)
+  assert.equal(p.resultCode, '000')
+  assert.equal(p.totalCount, 2)
+  assert.deepEqual(p.trades[0], { dong: '호계동', aptName: '평촌어바인퍼스트', area: 84.6, price: 151000, ymd: '2026-08-03', floor: '12', cancelled: false })
+  assert.equal(p.trades[1].cancelled, true)
+})
+
+test('recentMonths: 연도 경계를 넘는다', () => {
+  assert.deepEqual(recentMonths(new Date(2026, 1, 15), 3), ['202602', '202601', '202512'])
 })
