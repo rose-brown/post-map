@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `docs/prd-view.html` 은 `PRD.md` 를 **상대경로로 fetch** 한다. 둘을 떼어놓으면 뷰어가 깨진다.
 
-- **git 저장소가 아직 없다.** 커밋을 요청받으면 `git init` 부터 해야 한다.
+- git 저장소는 https://github.com/rose-brown/post-map (`main`). 현재 진행 상황은 `docs/HANDOFF.md`.
 - Phase 2 를 요청받으면 `docs/prompts/03-Phase2-...` 를 따르되, 이제는 **기존 코드를 확장**하는 것이지
   빈 디렉터리에서 새로 시작하는 것이 아니다.
 
@@ -24,9 +24,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev         # Vite dev 서버 (기본 5173). 검색·지오코딩 프록시는 여기서만 동작한다
 npm run build       # tsc -b && vite build
 npm run typecheck   # tsc -b --noEmit
+npm test            # node --test 'tests/**/*.test.ts' — 순수 함수(매퍼·링크 결정)만. glob 따옴표 필수
 ```
 
-**테스트 러너가 없다.** 단일 테스트를 돌리는 명령도 없다. Phase 1 검증은 Playwright MCP 로 브라우저를 직접
+**UI 테스트 러너는 없다.** Phase 1 검증은 Playwright MCP 로 브라우저를 직접
 몰아서 했고(완료 기준 10개), 결과 스크린샷이 `docs/screenshots/` 에 있다. 동작을 바꿨으면 같은 방식으로
 직접 확인해라 — "타입이 통과하니 된다"로 끝내지 마라. 이 프로젝트에서 실제로 난 버그는 대부분 타입을 통과했다.
 
@@ -91,7 +92,7 @@ rm src/__gate.ts
 `properties` 는 스키마 필드와 스키마 밖 자유 필드를 **둘 다 허용**하되, 테이블 조회·필터·집계 대상은 스키마 필드뿐이다.
 값이 없으면 **키를 아예 저장하지 않는다**(`null` 을 넣지 않는다).
 
-**Phase 경계 = 저장소 경계**: Phase 1~2 는 IndexedDB 만, Phase 3 부터 Supabase + PostGIS.
+**Phase 경계 = 저장소 경계**: Phase 1~2 는 IndexedDB 만, Phase 3 부터 Supabase (PostGIS 는 쓰지 않는다 — geometry 는 jsonb, 스펙 D6).
 그래서 지금도 `db/db.ts` 에 스키마 버전과 `db/migrations.ts` 의 순차 업그레이드 함수 자리를 둔다.
 
 **어댑터 경계**: `GeocodingProvider` / `BasemapProvider` 인터페이스로 제공자를 갈아끼운다.
@@ -135,6 +136,14 @@ Phase 1 구현 중 실제로 시간을 잡아먹은 것들이다. 같은 것을 
   StrictMode 이중 마운트가 프로젝트를 두 개 만들고, 도형이 들어간 프로젝트와 화면이 로드한 프로젝트가 갈린다.
 - **Playwright 로 지도를 클릭할 때**: 정보 패널이 열리면 지도가 리사이즈되므로 화면 좌표를 **매번 다시** 계산해라.
   패널 폭 전환 애니메이션 중에 측정하면 잘못된 값을 읽는다.
+- **RLS + `INSERT … RETURNING`**: 반환 행도 SELECT 정책(`using`)을 통과해야 한다. 그래서 헤더 없는
+  INSERT 정책을 따로 둬도 supabase-js `.insert().select()`·`Prefer: return=representation` 은 42501 이다.
+  새 프로젝트 uuid 는 클라이언트가 만들어 헤더에 먼저 박는다 (`repo.ts` 의 `createProject`).
+- **Storage 삭제에도 SELECT 정책이 필요하다.** 없으면 `remove()` 가 403 이다. Storage API 도
+  `x-project-id` 헤더를 `request.headers` 로 넘긴다(실측) — 정책은 `storage.foldername(name)[1]` 로 조인다.
+- **Claude in Chrome 확장은 localhost 를 사이트 권한으로 막는다.** Playwright MCP 가 없으면
+  `~/.npm/_npx/*/node_modules/playwright` + `~/Library/Caches/ms-playwright` 캐시 브라우저를
+  `executablePath` 로 지정해 스크립트로 몬다. 다기기는 `localhost` 와 `127.0.0.1` 두 오리진으로 흉내 낸다.
 
 ## 확인된 VWorld API 사실 (추측이 아니라 실호출로 확인)
 

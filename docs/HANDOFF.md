@@ -8,62 +8,30 @@
 
 ## 지금 상태 한 줄
 
-**Phase 3(다기기 동기화) 코드는 전부 끝났고, 서버 RLS 정책 확인 한 지점에서 막혀 있다.**
+**Phase 3(다기기 동기화)는 완료됐다 — 서버 RLS·Storage 실측과 브라우저 다기기 확인까지 끝났다.**
 Phase 2 는 계획만 있고 손대지 않았다.
 
-`npm test` 12개 통과 · `npm run typecheck` 통과 · `npm run build` 통과 ·
-저장 게이트 자체 점검 TS2345 확인. 커밋 7개가 **로컬에만** 있다 (push 안 함).
+`npm test` 12개 통과 · `npm run typecheck` 통과 · `npm run build` 통과.
+커밋이 **로컬에만** 있다 (push 안 함 — 아래 2번).
 
 ---
 
-## 1. 막혀 있는 것 — 여기서부터 시작하면 된다
+## 1. 직전에 풀린 것 (자세한 기록은 `docs/log/2026-09-27.md` 9절)
 
-`supabase/schema.sql` 을 대시보드에서 실행해 **테이블은 생겼다.** 그런데:
+- 새 프로젝트 INSERT 42501 → 원인은 정책 누락이 아니라 `RETURNING` 이 SELECT 정책에 걸린 것.
+  uuid 를 클라이언트가 만들어 헤더에 먼저 박도록 고쳤고, 헤더 없는 INSERT 예외 정책을 없앴다.
+- Storage 삭제 403 (이미지 달린 피처 삭제가 실패하던 버그) → 헤더 범위 SELECT 정책 추가.
+  Storage 도 헤더를 받는 것이 실측돼 업로드·삭제 정책도 프로젝트 폴더로 조였다.
+- **D9 판정: 헤더 없는 Storage 목록 열람은 `[]`** — 스펙 3절에 기록했다.
+- 원격 DB 는 `supabase/schema.sql` 과 일치한다 (MCP `apply_migration` 3건). security advisors 경고 0건.
+- 브라우저 확인(이관·F-81 로컬 보존·A↔B 동기화·오프라인 실패/재시도/beforeunload) 전부 통과.
+  스크린샷 `docs/screenshots/p3-0*.png`.
 
-```
-헤더 없이 projects 조회   → []       기대대로 (목록 열람 차단)
-헤더 없이 projects INSERT → 42501    ✗ "create new project" 정책이 안 먹는다
-```
+## 2. 그다음 남은 일 (사람 판단이 필요한 것)
 
-`[]` 는 판별 근거가 못 된다 — **정책이 하나도 없어도** RLS 는 전부 거부한다.
-
-### 판별: 정책이 실제로 걸렸는지 본다
-
-Supabase → SQL Editor (Editor 는 마지막 결과만 보여주므로 하나씩 실행):
-
-```sql
-select schemaname, tablename, policyname, cmd, roles::text
-from pg_policies where schemaname in ('public','storage')
-order by schemaname, tablename, policyname;
-```
-
-- **행이 비었거나 6개보다 적다** → `schema.sql` 을 두 번 이상 돌려 `create table … already exists`
-  에서 멈춘 것이다. Supabase SQL Editor 는 한 트랜잭션이라 뒤의 `create policy` 가 전부 날아간다.
-  → `schema.sql` 의 정책 부분만 다시 실행한다. 재실행이 안전하도록 각 `create policy` 앞에
-  `drop policy if exists "<이름>" on <테이블>;` 을 붙여라.
-- **6개가 다 있다** → 신형 키 `sb_publishable_…` 가 `anon` role 로 매핑되지 않는 것을 의심한다.
-  정책이 전부 `to anon` 이라 role 이 다르면 적용되지 않는다.
-
-### 그다음 RLS 5단 확인
-
-계획 문서 `docs/superpowers/plans/2026-09-27-phase3-multidevice-sync.md` 의 **Task 1 Step 4** 에
-curl 명령이 그대로 있다. `.env` 를 `source` 하지 말고 awk 로 파싱해라 — 4행에 `=` 뒤 공백이 있어
-`source` 가 깨진다.
-
-**(5) Storage 목록 열람 판정이 이 구현의 판정 지점이다.**
-`POST /storage/v1/object/list/blobs` 가 객체를 나열하면 "링크를 아는 사람만 이미지 접근"이라는
-전제(스펙 D9)가 깨진다. 그때는 버킷을 private 으로 돌리고 Storage 접근을 다시 설계해야 한다.
-**판정 결과를 스펙 3절 "미확인 — Storage" 에 한 줄로 기록할 것.**
-
-## 2. 그다음 남은 일
-
-- `npm run dev` 로 다기기 동작 확인 (계획 Task 8 Step 3, Playwright MCP 프로필 2개).
-  A 에서 작도 → `?p=<uuid>` 를 B 에서 열기 → 같은 도형 → B 수정 → A 새로고침 반영.
-  **함정**: 정보 패널이 열리면 지도가 리사이즈되므로 화면 좌표를 매번 다시 계산해라.
-- 이관 확인 — 복사 후 **로컬 IndexedDB 가 그대로 남아 있는지** (F-81).
-- 저장 실패 경로 — DevTools Offline → 실패 표시·재시도·`beforeunload` 경고.
-- stale 문서 정리: `CLAUDE.md` 의 "git 저장소가 없다"·"Phase 3 은 PostGIS"·"테스트 러너가 없다".
-- push (커밋 7개가 로컬에만 있다).
+- **push** — 커밋이 로컬에만 있다. push 하면 CI 가 돌고 `Pages 배포` 는 아래 5번 사유로 또 실패한다.
+- **VWorld 키 재발급** (6번) — 시급.
+- CI/Pages 전환 (5번) — 키 재발급 뒤에 순서대로.
 
 ## 3. Phase 3 에서 무엇을 했는지 (짧게)
 
@@ -161,6 +129,5 @@ npm run typecheck
 
 ## 8. Supabase MCP
 
-`.mcp.json` 에 추가했고 상태는 **승인 대기**다. `claude` 를 새로 시작하면 프로젝트 MCP 승인
-프롬프트가 뜨고, 그다음 `/mcp` 에서 supabase 를 Authenticate 한다. 붙으면 대시보드를 거치지 않고
-SQL 을 직접 실행할 수 있어 1번 판별이 훨씬 빨라진다.
+연결돼 있다 (`/mcp` 에서 Authenticate 완료). `execute_sql` 로 대시보드 없이 SQL 을 돌리고,
+DDL 은 `apply_migration` 으로 넣은 뒤 `supabase/schema.sql` 에도 반영한다.
