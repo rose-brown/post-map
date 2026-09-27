@@ -54,15 +54,27 @@ KB 는 모두 **비공식 내부 API** 이고 인증 없이 응답했다.
 - 전국 50 명단 `.../kbleadapt50/aptRankgLeadList` (파라미터 없음) 도 있으나 이 설계는 쓰지 않는다.
 - KB 단지별 거래 API(`land-extra/price/v1/api/aptDanjiRealTransPriceChart` 등)는 월 집계뿐.
 
+국토부 (data.go.kr `15126469` "국토교통부_아파트 매매 실거래가 자료", 2026-09-27 실호출):
+
+- `GET https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade`
+  `serviceKey, LAWD_CD(5자리), DEAL_YMD(YYYYMM), numOfRows, pageNo` → 평면 XML.
+  정상 `resultCode=000`, `totalCount`, `<item>` 반복. 안양 동안구 2026-08 = 363건 (`numOfRows=1000` 한 페이지).
+- item 필드: `sggCd, umdNm, aptNm, jibun, aptDong, excluUseAr, dealAmount("57,200" 만원), dealYear, dealMonth, dealDay,
+  floor, buildYear, cdealType, cdealDay, dealingGbn, buyerGbn, slerGbn, rgstDate, estateAgentSggNm, landLeaseholdGbn`.
+  **해제 거래는 `cdealType=O`** (동안구 2026-08 에 6건). 단지 식별 코드 필드는 없다 — 이름 매칭이 맞다.
+- **`serviceKey` 는 디코딩된 값을 넣어야 한다.** 포털의 Encoding 키(`%xx` 포함)를 `URLSearchParams` 에 그대로 넣으면
+  이중 인코딩되어 HTTP 403 `SERVICE_KEY_IS_NOT_REGISTERED_ERROR` 가 난다. 코드는 `decodeURIComponent(MOLIT_KEY)` 로
+  두 키 모두 받는다.
+- **화성시 거래는 신설 구 코드로만 나온다.** `41590` 은 2025-12·2026-01·2026-08 모두 0건,
+  `41591 / 41593 / 41595 / 41597` 은 2026-08 에 85 / 169 / 266 / 139건. 과거 달도 새 코드로 옮겨져 있다.
+- `process.loadEnvFile('.env')` 는 현 `.env` 를 문제없이 읽는다.
+
 ### 3.2 미확인 — 구현 첫 작업에서 확인한다
 
-- **국토부 실거래 API 전부.** `.env` 에 키가 없다. 엔드포인트·필드명·페이지 크기·일일 한도·해제 거래 표시 필드·
-  단지 식별 필드를 실호출로 확인하고 이 절을 고친다. 아래 4절의 국토부 부분은 확인 전 가정이다.
-- **화성시 거래의 시군구 코드.** 2026 신설 구 이후 국토부가 `41590` 을 쓰는지 신설 구 코드를 쓰는지.
+- **국토부 일일 호출 한도.** 69 지역(화성 4코드) × 12개월 ≈ 870회 + 페이지.
 - **KB·국토부 단지 매칭률.** 국토부 응답에 단지명·법정동이 있다는 가정 위에서 이름 정규화 매칭을 한다.
   안양 50건으로 먼저 잰다.
 - **3,400 도형에서 앱 성능.** Terra Draw 와 우측 목록이 50 → 3,400 에서 버티는지.
-- `process.loadEnvFile` 이 현 `.env`(4행 `=` 뒤 공백)를 읽는지.
 - KB 이용약관 · 자동 수집 허용 여부 · 요청 한도. vworld 와 같이 확인 불가로 남을 수 있다.
 
 ### 3.3 명시된 한계
