@@ -16,6 +16,18 @@ const SAVE_LABEL: Record<string, string> = {
 export function TopBar({ map }: { map: MapLibreMap | null }) {
   const [saveState, setSaveState] = useState('idle')
   const [exportOpen, setExportOpen] = useState(false)
+  const [copied, setCopied] = useState<'' | 'ok' | 'fail'>('')
+
+  // 링크가 곧 접근 권한이다 (스펙 D4). URL 에는 commitLink 가 항상 ?p= 를 남겨 둔다.
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      setCopied('ok')
+    } catch {
+      setCopied('fail')
+    }
+    setTimeout(() => setCopied(''), 1500)
+  }
 
   const basemapId = useStore((s) => s.basemapId)
   const setBasemap = useStore((s) => s.setBasemap)
@@ -94,6 +106,15 @@ export function TopBar({ map }: { map: MapLibreMap | null }) {
           {SAVE_LABEL[saveState] ?? saveState}
         </span>
       )}
+
+      <button
+        onClick={() => void copyLink()}
+        title="이 링크를 아는 사람은 누구나 보고 고치고 지울 수 있습니다"
+        className="touch-target shrink-0 rounded-lg bg-surface-sub px-2.5 py-1.5 text-[12px] font-medium hover:bg-line-soft"
+        data-testid="copy-link"
+      >
+        {copied === 'ok' ? '복사됨' : copied === 'fail' ? '복사 실패' : '링크 복사'}
+      </button>
 
       <div className="relative shrink-0">
         <button
