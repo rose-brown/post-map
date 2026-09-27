@@ -30,16 +30,10 @@ export function App() {
   const [snap, setSnap] = useState<Snap>('half')
 
   const isMobile = useIsMobile()
-  const init = useStore((s) => s.init)
-  const ready = useStore((s) => s.ready)
   const selectedId = useStore((s) => s.selectedId)
   const select = useStore((s) => s.select)
   const basemapId = useStore((s) => s.basemapId)
   const setBasemap = useStore((s) => s.setBasemap)
-
-  useEffect(() => {
-    void init()
-  }, [init])
 
   // 도형을 선택하면 정보 페이지가 열린다. 모바일은 바텀시트로.
   useEffect(() => {
@@ -50,14 +44,6 @@ export function App() {
     setSheet('info')
     setSnap('half')
   }, [selectedId])
-
-  if (!ready) {
-    return (
-      <div className="grid h-full place-items-center text-sm text-ink-mut">
-        불러오는 중…
-      </div>
-    )
-  }
 
   /* ---------------- 모바일: 지도 전체화면 + 하단 도구 바 + 바텀시트 ---------------- */
   if (isMobile) {

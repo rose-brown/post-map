@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import type { Geometry, Point } from 'geojson'
 import {
   DEFAULT_RADII,
-  SCHEMA_VERSION,
   nowIso,
   uid,
   type Block,
@@ -16,15 +15,12 @@ import { userInput } from '../persist/persistable'
 import {
   deleteFeatures,
   deleteLayer,
-  flush,
   loadAll,
   saveFeature,
   saveFeatures,
   saveLayer,
-  saveProject,
-  firstProjectId,
+  setActiveProject,
 } from '../db/repo'
-import { runMigrations } from '../db/db'
 import { buildRings } from '../map/rings'
 import type { Template } from '../templates'
 
@@ -39,7 +35,8 @@ export type DrawMode =
 
 const PALETTE = ['#2563eb', '#db2777', '#15803d', '#b45309', '#7c3aed', '#0891b2']
 
-function newLayer(projectId: string, order: number, name?: string): Layer {
+/** StartGate·이관도 같은 기본값을 써야 하므로 export 한다. */
+export function newLayer(projectId: string, order: number, name?: string): Layer {
   return {
     id: uid('lyr'),
     projectId,
@@ -70,7 +67,7 @@ interface State {
   /** 저장되지 않는 표시 전용 주소. 제공자 약관 미확인이라 저장 경로로 보내지 않는다. */
   addressHints: Record<string, string>
 
-  init(): Promise<void>
+  init(projectId: string): Promise<void>
   setDrawMode(m: DrawMode): void
   setBasemap(id: string): void
   select(id: string | null): void
@@ -116,41 +113,13 @@ export const useStore = create<State>((set, get) => ({
   basemapId: 'Base',
   addressHints: {},
 
-  async init() {
+  async init(projectId: string) {
     if (initPromise) return initPromise
     initPromise = (async () => {
-      await runMigrations()
-      const id = await firstProjectId()
-
-      if (!id) {
-        const project: Project = {
-          id: uid('prj'),
-          name: '새 프로젝트',
-          description: '',
-          initialView: { lng: 126.978, lat: 37.5665, zoom: 12, bearing: 0, pitch: 0 },
-          schemaVersion: SCHEMA_VERSION,
-          createdAt: nowIso(),
-          updatedAt: nowIso(),
-        }
-        const layer = newLayer(project.id, 0, '기본 레이어')
-        saveProject(userInput(project))
-        saveLayer(userInput(layer))
-        await flush()
-        set({
-          ready: true,
-          project,
-          layers: [layer],
-          features: [],
-          activeLayerId: layer.id,
-        })
-        return
-      }
-
-      const { project, layers, features } = await loadAll(id)
-      if (!project) {
-        set({ ready: true })
-        return
-      }
+      setActiveProject(projectId)
+      const { project, layers, features } = await loadAll(projectId)
+      // 빈 지도를 띄우지 않는다 — 데이터가 지워진 것으로 오인된다. StartGate 가 오류를 보여준다.
+      if (!project) throw new Error('이 링크의 프로젝트를 찾을 수 없습니다.')
       const ensured = layers.length ? layers : [newLayer(project.id, 0, '기본 레이어')]
       if (!layers.length) saveLayer(userInput(ensured[0]))
       set({
@@ -160,7 +129,11 @@ export const useStore = create<State>((set, get) => ({
         features,
         activeLayerId: ensured[0].id,
       })
-    })()
+    })().catch((err) => {
+      // 실패한 약속을 남기면 재시도가 즉시 같은 오류로 거부된다.
+      initPromise = null
+      throw err
+    })
     return initPromise
   },
 
