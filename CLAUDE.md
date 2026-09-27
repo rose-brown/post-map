@@ -26,8 +26,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev         # Vite dev 서버 (기본 5173). 검색·지오코딩 프록시는 여기서만 동작한다
 npm run build       # tsc -b && vite build
 npm run typecheck   # tsc -b --noEmit
-npm test            # node --test 'tests/**/*.test.ts' — 순수 함수(매퍼·링크 결정)만. glob 따옴표 필수
+npm test            # node --test 'tests/**/*.test.ts' — 순수 함수(매퍼·링크 결정·lead50)만. glob 따옴표 필수
 node --test tests/mappers.test.ts   # 단일 파일. Node 22 가 .ts 를 타입 제거로 바로 돌린다
+node scripts/lead50/run.ts <projectId> [--only 코드,…] [--dry-run]   # 월간선도50 갱신 (월 1회). 스펙 docs/superpowers/specs/2026-09-27-lead50-layer-design.md
 ```
 
 배포: **`main` 에 push 하면** `.github/workflows/deploy.yml` 이 빌드해 GitHub Pages(`/post-map/`)에 올린다.
@@ -134,6 +135,7 @@ IndexedDB(`db/db.ts`, Dexie)는 읽기 경로에서 빠졌다. 남은 용도는 
 
 1. **`canPersistResults`** — 가장 중요한 제약. 저장이 불허인 제공자의 응답이 저장소(서버)로 흘러가면
    **타입 수준에서 막혀야** 한다. 외부 API를 새로 붙일 때마다 저장 허용 여부를 먼저 확인한다.
+   **예외 하나:** `scripts/lead50` 은 KB 응답을 앱 게이트 밖에서 Supabase 에 직접 저장한다 (약관 미확인, 사용자 결정 — 스펙 D2).
 2. 저장 좌표계는 **EPSG:4326 단일**. 변환은 업로드·표시 단계에서만, 원본 좌표계는 메타데이터로 보존.
 3. 거리·면적은 **측지 계산**(`map/rings.ts` 의 `turf.circle`). 픽셀·단순 위경도 차 금지.
 4. **API 키를 클라이언트 번들에 넣지 않는다.** 검색·지오코딩 키는 `vite.config.ts` 의 dev 프록시 뒤에 있다
@@ -177,6 +179,17 @@ Phase 1 구현 중 실제로 시간을 잡아먹은 것들이다. 같은 것을 
 - **Claude in Chrome 확장은 localhost 를 사이트 권한으로 막는다.** Playwright MCP 가 없으면
   `~/.npm/_npx/*/node_modules/playwright` + `~/Library/Caches/ms-playwright` 캐시 브라우저를
   `executablePath` 로 지정해 스크립트로 몬다. 다기기는 `localhost` 와 `127.0.0.1` 두 오리진으로 흉내 낸다.
+
+## 확인된 KB 데이터허브 · 국토부 실거래 API 사실 (실호출로 확인, `scripts/lead50`)
+
+자세한 것은 스펙 3.1. 다시 조사하지 않아도 되는 요점만:
+
+- **KB 내부 API 는 한글 파라미터 키까지 인코딩해야 한다** (`URLSearchParams`). `curl --data-urlencode` 는 값만 인코딩해 본문 없는 400.
+- 지역 목록은 시도 한 번 조회로 **평면 목록**(시와 하위 구가 같이). 시 코드로 다시 내려가면 시도 전체가 또 온다.
+- 지역 순위는 TOP 코드와 무관하게 최대 50. 화성시 신설 4개 구는 KB 가 500 → 화성시로 대체.
+- 국토부 `serviceKey` 는 **디코딩된 값**. Encoding 키를 그대로 넣으면 403 `SERVICE_KEY_IS_NOT_REGISTERED_ERROR`.
+- 화성시 거래는 신설 구 코드(41591/41593/41595/41597)로만 나온다. `41590` 은 0건.
+- 실거래 매칭은 **(법정동명, 지번)**. 이름 매칭은 오매칭을 냈다. 읍·면은 국토부가 "가평읍 대곡리" 라 KB `구주소` 에서 리까지 만든다.
 
 ## 확인된 VWorld API 사실 (추측이 아니라 실호출로 확인)
 

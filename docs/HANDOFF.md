@@ -11,7 +11,12 @@
 **Phase 3(다기기 동기화)는 완료됐다 — 서버 RLS·Storage 실측과 브라우저 다기기 확인까지 끝났다.**
 Phase 2 는 계획만 있고 손대지 않았다.
 
-`npm test` 12개 통과 · `npm run typecheck` 통과 · `npm run build` 통과.
+**월간선도50 레이어 (2026-09-27)** — 서울 25구 + 경기 44 지역의 KB 시세총액 상위 단지 3,288개가
+프로젝트 `92e81c2e-…` 의 "월간선도50" 레이어에 들어가 있다 (실거래 매칭 97.6%, Top 10 ★).
+월 1회 `node scripts/lead50/run.ts <projectId> --dry-run` → 리포트 확인 → 옵션 없이 실행.
+설계 `docs/superpowers/specs/2026-09-27-lead50-layer-design.md`, 계획 `docs/superpowers/plans/2026-09-27-lead50-layer.md`.
+
+`npm test` 통과 · `npm run typecheck` 통과 · `npm run build` 통과.
 `main` 은 원격과 같다.
 
 ---
