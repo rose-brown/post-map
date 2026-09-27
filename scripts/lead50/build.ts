@@ -9,6 +9,10 @@ import type { Block, Properties, PropertySchemaField } from '../../src/types.ts'
 export const LAYER_NAME = '월간선도50'
 export const TRADES_BLOCK_ID = 'blk_lead50_trades'
 
+/** 지역 순위가 이 값 이하인 단지에 ★ 를 붙인다 (사용자 결정 2026-09-27). */
+export const STAR_RANK = 10
+const STAR_ICON = 'star'
+
 /** 스펙 4.2. 순서 = 정보 카드 표시 순서 (D9: 실거래가 맨 위). */
 export const SCHEMA: PropertySchemaField[] = [
   { key: 'recentTrade', label: '최근 매매', type: 'text' },
@@ -79,6 +83,14 @@ export function leafRegions(sido: string, rows: KbAreaRow[]): Region[] {
 
 export function sggCodesFor(region: Region): string[] {
   return SGG_CODES_OVERRIDE[region.code] ?? [region.code.slice(0, 5)]
+}
+
+/** ★ 는 스크립트가 관리하되, 사용자가 고른 다른 아이콘은 건드리지 않는다. undefined = 키 없음. */
+export function rankIcon(current: unknown, rank: number): string | undefined {
+  const mine = current === undefined || current === 'dot' || current === STAR_ICON
+  if (rank <= STAR_RANK) return mine ? STAR_ICON : String(current)
+  if (current === STAR_ICON) return undefined
+  return current === undefined ? undefined : String(current)
 }
 
 /** KB 본번·부번 → 국토부 jibun 표기. 본번이 없으면 '' (매칭되지 않는다). */
@@ -179,6 +191,10 @@ export function mergeFeature(a: {
   const kept: Properties = {}
   for (const [k, v] of Object.entries(existing?.properties ?? {})) if (!SCHEMA_KEYS.has(k)) kept[k] = v
   const userBlocks = (existing?.blocks ?? []).filter((b) => b.id !== TRADES_BLOCK_ID)
+  const properties: Properties = { ...kept, ...a.props }
+  const icon = rankIcon(kept.icon, c.item.rank)
+  if (icon === undefined) delete properties.icon
+  else properties.icon = icon
   return {
     id: existing?.id ?? a.newId,
     project_id: a.projectId,
@@ -186,7 +202,7 @@ export function mergeFeature(a: {
     parent_id: existing?.parent_id ?? null,
     geometry: { type: 'Point', coordinates: [Number(c.detail.lng.toFixed(7)), Number(c.detail.lat.toFixed(7))] },
     title: c.item.aptName,
-    properties: { ...kept, ...a.props },
+    properties,
     blocks: a.block ? [a.block, ...userBlocks] : userBlocks,
     derived_from: existing?.derived_from ?? null,
     created_at: existing?.created_at ?? a.now,
