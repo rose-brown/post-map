@@ -37,12 +37,20 @@ jobs:
           # 불변 규칙 4 의 예외 — VWorld 타일 키는 도메인 등록 방식이라 번들에 들어간다.
           # vworld.kr 에 <계정>.github.io 도메인을 등록해야 배포본에서 타일이 나온다.
           VITE_VWORLD_KEY: ${{ secrets.VITE_VWORLD_KEY }}
+          # Phase 3 서버. publishable 키는 공개 전제다 (src/db/supabase.ts 주석). 없으면 앱이 열리지 않는다.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           # https://<계정>.github.io/<저장소>/ 로 서빙되므로 하위 경로를 넘긴다.
           BASE_PATH: /${{ github.event.repository.name }}/
         run: npm run build
 
       - name: 키가 번들에 들어갔는지 확인
         run: |
+          # Supabase 가 빠진 빌드는 시작 화면에서 멈춘다. 라이브 사이트를 덮어쓰지 않도록 여기서 끊는다.
+          if [ -z "${{ secrets.VITE_SUPABASE_URL }}" ] || [ -z "${{ secrets.VITE_SUPABASE_ANON_KEY }}" ]; then
+            echo "::error::VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY 시크릿이 없습니다."
+            exit 1
+          fi
           if [ -z "${{ secrets.VITE_VWORLD_KEY }}" ]; then
             echo "::warning::VITE_VWORLD_KEY 시크릿이 없습니다. 배포본에서 배경지도가 비어 보입니다."
           fi

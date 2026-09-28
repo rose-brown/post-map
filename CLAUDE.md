@@ -2,19 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **이어서 작업한다면 `docs/HANDOFF.md` 를 먼저 읽어라.**
-> 현재 막혀 있는 지점(GitHub Pages 배포 마무리)과 직전 세션에서 한 일이 거기 있다.
+> **이어서 작업한다면 `docs/HANDOFF.md` 를 먼저 읽어라.** 현재 상태·남은 일·사용자가 이미 내린 결정이 거기 있다.
+> 세션별 상세 기록은 `docs/log/YYYY-MM-DD.md`.
 
 ## 이 저장소의 성격
 
 한 디렉터리에 두 가지가 같이 있다.
 
-1. **Phase 1 앱** (루트) — Vite + React 19 + TS strict + Tailwind v4. `docs/prompts/02-Phase1-...` 의 완료 기준 10개를 충족한다.
+1. **앱** (루트) — Vite + React 19 + TS strict + Tailwind v4 + MapLibre + Terra Draw.
+   Phase 1(`docs/prompts/02-...` 완료 기준 10개)과 Phase 3(Supabase 다기기 동기화)이 구현돼 있고 **Phase 2 는 미착수**다.
+   Phase 3 은 PRD 대로가 아니라 축소판이다 — 설계는 `docs/superpowers/specs/2026-09-27-phase3-multidevice-sync-design.md`.
 2. **프롬프트 세트와 문서** (`docs/`) — 이 제품을 단계적으로 만들기 위한 프롬프트, PRD, 디자인 참조 목업.
 
 `docs/prd-view.html` 은 `PRD.md` 를 **상대경로로 fetch** 한다. 둘을 떼어놓으면 뷰어가 깨진다.
 
-- **git 저장소가 아직 없다.** 커밋을 요청받으면 `git init` 부터 해야 한다.
+- git 저장소는 https://github.com/rose-brown/post-map (`main`). 현재 진행 상황은 `docs/HANDOFF.md`.
 - Phase 2 를 요청받으면 `docs/prompts/03-Phase2-...` 를 따르되, 이제는 **기존 코드를 확장**하는 것이지
   빈 디렉터리에서 새로 시작하는 것이 아니다.
 
@@ -24,9 +26,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev         # Vite dev 서버 (기본 5173). 검색·지오코딩 프록시는 여기서만 동작한다
 npm run build       # tsc -b && vite build
 npm run typecheck   # tsc -b --noEmit
+npm test            # node --test 'tests/**/*.test.ts' — 순수 함수(매퍼·링크 결정·lead50)만. glob 따옴표 필수
+node --test tests/mappers.test.ts   # 단일 파일. Node 22 가 .ts 를 타입 제거로 바로 돌린다
+node scripts/lead50/run.ts <projectId> [--only 코드,…] [--dry-run]   # 월간선도50 갱신 (월 1회). 스펙 docs/superpowers/specs/2026-09-27-lead50-layer-design.md
 ```
 
-**테스트 러너가 없다.** 단일 테스트를 돌리는 명령도 없다. Phase 1 검증은 Playwright MCP 로 브라우저를 직접
+배포: **`main` 에 push 하면** `.github/workflows/deploy.yml` 이 빌드해 GitHub Pages(`/post-map/`)에 올린다.
+빌드 env 는 Actions 시크릿 `VITE_VWORLD_KEY`·`VITE_SUPABASE_URL`·`VITE_SUPABASE_ANON_KEY`.
+`gh-pages` 브랜치는 옛 수동 배포본일 뿐 서비스되지 않는다 — 거기에 올리지 마라.
+배포본에는 dev 프록시가 없어 검색·지오코딩이 자동으로 꺼진다 (`providers/geocoding.ts` 의 `DEV || VITE_SEARCH_PROXY`).
+
+**UI 테스트 러너는 없다.** Phase 1 검증은 Playwright MCP 로 브라우저를 직접
 몰아서 했고(완료 기준 10개), 결과 스크린샷이 `docs/screenshots/` 에 있다. 동작을 바꿨으면 같은 방식으로
 직접 확인해라 — "타입이 통과하니 된다"로 끝내지 마라. 이 프로젝트에서 실제로 난 버그는 대부분 타입을 통과했다.
 
@@ -73,11 +83,33 @@ rm src/__gate.ts
 - 링은 `parentId` 로 중심 point 를 참조한다. 중심을 지우면 `removeFeature` 가 cascade 로 같이 지우고,
   중심을 끌면 `change` 핸들러가 링을 다시 그린다.
 
-### 저장 경로 (`db/repo.ts`)
+### 저장 경로 (`db/repo.ts`) — 서버가 진실의 원천 (Phase 3)
 
-쓰기는 **500ms 디바운스 배치**다. 매 키 입력마다 트랜잭션을 열지 않는다.
-따라서 **IndexedDB 를 직접 읽기 직전에는 `flush()` 를 불러야 한다** — 내보내기가 그렇게 한다.
-`onSaveState()` 구독이 상단바의 "저장됨 · 방금" 표시를 만든다.
+쓰기는 **500ms 디바운스 배치**로 Supabase 에 간다. 매 키 입력마다 요청하지 않는다.
+따라서 **서버를 직접 읽기 직전에는 `flush()` 를 불러야 한다** — 내보내기가 그렇게 한다.
+`onSaveState()` 구독이 상단바의 "저장됨 · 방금" / "저장 실패 · 다시 시도"(`retryFlush`) 를 만들고,
+`hasUnsaved()` 가 `beforeunload` 경고를 건다. **온라인 우선**이라 오프라인 큐가 없다 (알고 고른 트레이드오프).
+`repo.ts` 공개 함수 시그니처는 Phase 1 과 같아서 스토어·UI 는 저장소 교체를 모른다.
+
+IndexedDB(`db/db.ts`, Dexie)는 읽기 경로에서 빠졌다. 남은 용도는 `db/migrate-local.ts` 의 **이관 원본**뿐이고,
+이관은 복사만 하고 로컬을 지우지 않는다 (F-81).
+
+### 프로젝트 링크 = 권한 (Phase 3) — 로그인이 없다
+
+`db/project-link.ts` → `ui/StartGate.tsx` → `db/supabase.ts` → `supabase/schema.sql` 을 같이 봐야 보인다.
+
+- 어느 프로젝트를 열지는 `?p=<uuid>` → localStorage → 없음 순으로 정한다. 정해지면 URL·localStorage 양쪽에 남긴다.
+  없으면 `StartGate` 가 "로컬 기록 서버로 복사" 또는 "새로 시작"을 묻는다. **다른 기기는 링크 없이는 같은 지도를 못 연다**
+  — 그래서 상단바에 "링크 복사" 버튼이 있다.
+- `setActiveProject(id)` 가 모든 요청에 `x-project-id` 헤더를 붙이는 클라이언트를 만든다. RLS 정책은
+  `request.headers` 의 그 값과 행의 `project_id` 를 비교한다. 헤더가 없으면 NULL 비교로 0건 — 목록 열람이 막힌다.
+- 새 프로젝트 uuid 는 **클라이언트가 만든다** (`createProject`). 헤더 없는 INSERT 예외 정책은 두지 않는다 (아래 함정 참조).
+- 이미지: Storage 버킷 `blobs` 는 public, 경로 `{projectId}/{blobId}`. 읽기는 URL, 쓰기·삭제·목록은 경로 첫 폴더 = 헤더인 정책.
+  메타는 `public.blobs` 테이블. FK cascade 는 메타만 지우므로 피처·레이어 삭제 전에 `purgeBlobsOfFeatures` 가 객체를 먼저 지운다.
+- `geometry` 는 PostGIS 가 아니라 **jsonb** 다 (스펙 D6 — 공간 연산이 전부 클라이언트 turf).
+- 스키마·정책 변경: Supabase MCP(`.mcp.json`)의 `apply_migration` 으로 원격에 넣고 **`supabase/schema.sql` 도 같이 고친다**.
+  둘이 어긋나지 않게 유지한다. 정책은 SQL 로 확인하지 말고 anon 역할로 **실제로 막히는 것을** 봐라
+  (`begin; set local role anon; select set_config('request.headers','{...}',true); ...; rollback;`).
 
 ### 지도 준비 시점
 
@@ -91,20 +123,24 @@ rm src/__gate.ts
 `properties` 는 스키마 필드와 스키마 밖 자유 필드를 **둘 다 허용**하되, 테이블 조회·필터·집계 대상은 스키마 필드뿐이다.
 값이 없으면 **키를 아예 저장하지 않는다**(`null` 을 넣지 않는다).
 
-**Phase 경계 = 저장소 경계**: Phase 1~2 는 IndexedDB 만, Phase 3 부터 Supabase + PostGIS.
-그래서 지금도 `db/db.ts` 에 스키마 버전과 `db/migrations.ts` 의 순차 업그레이드 함수 자리를 둔다.
+**Phase 경계 = 저장소 경계**였다: Phase 1~2 는 IndexedDB, Phase 3 부터 Supabase. **Phase 3 을 먼저 했으므로 Phase 2 는 서버 저장 위에서 만든다**
+(PostGIS 는 쓰지 않는다 — geometry 는 jsonb, 스펙 D6).
+`db/db.ts` 의 스키마 버전과 `db/migrations.ts` 는 이제 이관 직전에 옛 로컬 데이터를 올리는 데 쓰인다
+(`migrateLocalToServer` 가 `runMigrations()` 를 먼저 부른다).
 
 **어댑터 경계**: `GeocodingProvider` / `BasemapProvider` 인터페이스로 제공자를 갈아끼운다.
 단, **인터페이스만 정의하고 구현체는 Phase당 하나씩만** 만든다 — 과설계 금지가 명시돼 있다.
 
 ## 불변 규칙 (어기면 설계가 깨진다)
 
-1. **`canPersistResults`** — 가장 중요한 제약. 저장이 불허인 제공자의 응답이 IndexedDB 로 흘러가면
+1. **`canPersistResults`** — 가장 중요한 제약. 저장이 불허인 제공자의 응답이 저장소(서버)로 흘러가면
    **타입 수준에서 막혀야** 한다. 외부 API를 새로 붙일 때마다 저장 허용 여부를 먼저 확인한다.
+   **예외 하나:** `scripts/lead50` 은 KB 응답을 앱 게이트 밖에서 Supabase 에 직접 저장한다 (약관 미확인, 사용자 결정 — 스펙 D2).
 2. 저장 좌표계는 **EPSG:4326 단일**. 변환은 업로드·표시 단계에서만, 원본 좌표계는 메타데이터로 보존.
 3. 거리·면적은 **측지 계산**(`map/rings.ts` 의 `turf.circle`). 픽셀·단순 위경도 차 금지.
-4. **API 키를 클라이언트 번들에 넣지 않는다.** Phase 1~2 는 `vite.config.ts` 의 dev 프록시,
-   Phase 3 부터 Supabase Edge Function. 도메인 등록 방식 키(VWorld 타일)만 예외이고 그 이유를 주석에 남긴다.
+4. **API 키를 클라이언트 번들에 넣지 않는다.** 검색·지오코딩 키는 `vite.config.ts` 의 dev 프록시 뒤에 있다
+   (배포용 서버 프록시는 아직 없다 — 원래 계획은 Supabase Edge Function). 예외는 둘이고 이유를 주석에 남겼다:
+   도메인 등록 방식인 VWorld 타일 키, 공개 전제인 Supabase publishable 키(방어선은 RLS, `db/supabase.ts`).
 5. 모든 지오메트리는 **GeoJSON** 으로 주고받는다. 내부 표현을 따로 만들지 않는다.
 6. **도메인 용어를 코드에 박지 않는다.** 매물·단지·임장 같은 말은 `src/templates/*.ts` 데이터로만 존재하고,
    코드 분기로 도메인을 구분하지 않는다.
@@ -127,7 +163,7 @@ Phase 1 구현 중 실제로 시간을 잡아먹은 것들이다. 같은 것을 
 - **Terra Draw select 모드의 `flags` 는 모드 이름으로 키를 잡는다** (`polygon`, `linestring`, …).
   꼭짓점 편집은 `flags[mode].feature.coordinates.draggable`.
 - **HTML5 drag-and-drop 을 쓰지 마라** — 터치에서 동작하지 않는다. 블록 순서 변경은 포인터 이벤트로 구현돼 있다.
-- **스토어에서 도형을 지울 때 Terra Draw 에도 알려야 한다.** 스토어·IndexedDB 만 고치면
+- **스토어에서 도형을 지울 때 Terra Draw 에도 알려야 한다.** 스토어·서버만 고치면
   도형이 지도에 계속 그려져서 "삭제가 안 된다"로 보인다. 지금은 동기화 이펙트가 양방향이라
   (`syncedIds` 기준으로 고아 제거) 정보 페이지 삭제·레이어 삭제·cascade 가 모두 덮인다.
   새 삭제 경로를 만들 때 이 이펙트를 우회하지 마라.
@@ -135,6 +171,25 @@ Phase 1 구현 중 실제로 시간을 잡아먹은 것들이다. 같은 것을 
   StrictMode 이중 마운트가 프로젝트를 두 개 만들고, 도형이 들어간 프로젝트와 화면이 로드한 프로젝트가 갈린다.
 - **Playwright 로 지도를 클릭할 때**: 정보 패널이 열리면 지도가 리사이즈되므로 화면 좌표를 **매번 다시** 계산해라.
   패널 폭 전환 애니메이션 중에 측정하면 잘못된 값을 읽는다.
+- **RLS + `INSERT … RETURNING`**: 반환 행도 SELECT 정책(`using`)을 통과해야 한다. 그래서 헤더 없는
+  INSERT 정책을 따로 둬도 supabase-js `.insert().select()`·`Prefer: return=representation` 은 42501 이다.
+  새 프로젝트 uuid 는 클라이언트가 만들어 헤더에 먼저 박는다 (`repo.ts` 의 `createProject`).
+- **Storage 삭제에도 SELECT 정책이 필요하다.** 없으면 `remove()` 가 403 이다. Storage API 도
+  `x-project-id` 헤더를 `request.headers` 로 넘긴다(실측) — 정책은 `storage.foldername(name)[1]` 로 조인다.
+- **Claude in Chrome 확장은 localhost 를 사이트 권한으로 막는다.** Playwright MCP 가 없으면
+  `~/.npm/_npx/*/node_modules/playwright` + `~/Library/Caches/ms-playwright` 캐시 브라우저를
+  `executablePath` 로 지정해 스크립트로 몬다. 다기기는 `localhost` 와 `127.0.0.1` 두 오리진으로 흉내 낸다.
+
+## 확인된 KB 데이터허브 · 국토부 실거래 API 사실 (실호출로 확인, `scripts/lead50`)
+
+자세한 것은 스펙 3.1. 다시 조사하지 않아도 되는 요점만:
+
+- **KB 내부 API 는 한글 파라미터 키까지 인코딩해야 한다** (`URLSearchParams`). `curl --data-urlencode` 는 값만 인코딩해 본문 없는 400.
+- 지역 목록은 시도 한 번 조회로 **평면 목록**(시와 하위 구가 같이). 시 코드로 다시 내려가면 시도 전체가 또 온다.
+- 지역 순위는 TOP 코드와 무관하게 최대 50. 화성시 신설 4개 구는 KB 가 500 → 화성시로 대체.
+- 국토부 `serviceKey` 는 **디코딩된 값**. Encoding 키를 그대로 넣으면 403 `SERVICE_KEY_IS_NOT_REGISTERED_ERROR`.
+- 화성시 거래는 신설 구 코드(41591/41593/41595/41597)로만 나온다. `41590` 은 0건.
+- 실거래 매칭은 **(법정동명, 지번)**. 이름 매칭은 오매칭을 냈다. 읍·면은 국토부가 "가평읍 대곡리" 라 KB `구주소` 에서 리까지 만든다.
 
 ## 확인된 VWorld API 사실 (추측이 아니라 실호출로 확인)
 
@@ -176,15 +231,16 @@ Design Compiler 목업(`<x-dc>` + `text/x-dc` 스크립트)이다. **실행 가�
 **계승하는 것은 UI 구조뿐이다**: 핀 선택 → 정보 페이지 → 속성 목록 + 노션형 블록 편집, 템플릿 1클릭 적용, 하단 힌트 알약.
 도메인 하드코딩은 스키마·템플릿 데이터로 치환한다.
 (갤러리를 `readAsDataURL` 로 다루는 것도 목업 한정이다. 실제 구현은 Blob + `URL.createObjectURL` 이고,
-`data:` URL 로 저장하면 IndexedDB 용량이 부푼다.)
+`data:` URL 로 저장하면 용량이 부푼다. 지금은 Blob 을 Storage 에 올린다.)
 
 ## 알려진 불일치·미해결
 
 - `README.md` 의 사용 순서 표가 `04-Phase3-...`·`05-Phase4-...` 를 가리키지만 두 파일은 아직 없다. 존재하는 것은 `00`~`03` 이다.
+  표의 Phase 3 설명(PostGIS·인증·팀 권한)도 실제 구현(jsonb·비밀 링크·로그인 없음)과 다르다. PRD 4.4 도 마찬가지.
 - `canPersistResults` 가 `false` 라 검색 결과의 주소·장소명이 저장되지 않는다 (위 "확인된 VWorld API 사실" 참조).
-- `.env` 의 타일 키와 검색 키가 같은 값이면 타일 쪽에서 이미 노출되므로 dev 프록시가 키를 가려주지 못한다.
-  운영 전에 별도 발급이 필요하다.
-- 번들이 1.59MB(gzip 434KB)이고 코드 스플리팅을 하지 않았다.
+- `.env` 의 타일 키와 검색 키가 같은 값이라 dev 프록시가 검색 키를 가려주지 못하고, 두 키 모두 공개 저장소에 노출돼 있다.
+  **사용자가 재발급하지 않고 유지하기로 결정했다** (HANDOFF 6번) — 다시 권하지 마라.
+- 번들이 1.82MB(gzip 494KB)이고 코드 스플리팅을 하지 않았다.
 - 레이어 숨김이 Terra Draw 가 그리는 도형에는 적용되지 않는다 (TD 에 레이어 개념이 없다).
 - 목록은 `ui/FeatureList.tsx` 가 우측 패널(모바일은 바텀시트)에 상시 띄운다. 행을 누르면
   point 는 `flyTo`, 나머지는 bbox `fitBounds` 로 이동한 뒤 정보 페이지를 연다.

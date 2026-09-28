@@ -57,8 +57,9 @@ textarea {
   resize: vertical;
 }
 
-/* 터치 타깃 44px 이상 — 모바일 작도용 (02 §3) */
-@media (pointer: coarse) {
+/* 터치 타깃 44px 이상 — 모바일 작도용 (02 §3).
+   pointer 가 아니라 레이아웃 조건이다 (불변 규칙 7). 폭은 App.tsx 의 useIsMobile 과 같다. */
+@media (max-width: 768px) {
   .touch-target {
     min-width: 44px;
     min-height: 44px;
