@@ -318,15 +318,28 @@ export async function loadAll(projectId: string): Promise<{
   const [p, l, f] = await Promise.all([
     c.from('projects').select('*').eq('id', projectId).maybeSingle(),
     c.from('layers').select('*').eq('project_id', projectId).order('order'),
-    c.from('features').select('*').eq('project_id', projectId),
+    loadFeatureRows(projectId),
   ])
   if (p.error) throw p.error
   if (l.error) throw l.error
-  if (f.error) throw f.error
   return {
     project: p.data ? rowToProject(p.data as ProjectRow) : undefined,
     layers: ((l.data ?? []) as LayerRow[]).map(rowToLayer),
-    features: ((f.data ?? []) as FeatureRow[]).map(rowToFeature),
+    features: f.map(rowToFeature),
+  }
+}
+
+/** 서버가 한 응답을 1000행으로 자른다(PostgREST max-rows). 페이지를 끝까지 이어 받는다. */
+async function loadFeatureRows(projectId: string): Promise<FeatureRow[]> {
+  const PAGE = 1000
+  const out: FeatureRow[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await client()
+      .from('features').select('*').eq('project_id', projectId)
+      .order('id').range(from, from + PAGE - 1)
+    if (error) throw error
+    out.push(...((data ?? []) as FeatureRow[]))
+    if (!data || data.length < PAGE) return out
   }
 }
 
