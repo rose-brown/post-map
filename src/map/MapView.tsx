@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Map as MapLibreMap,
   NavigationControl,
@@ -32,9 +32,10 @@ import type { FeatureCollection } from 'geojson'
 import { useStore, type DrawMode } from '../store/useStore'
 import { vworldBasemap, hasBasemapKey } from '../providers/basemap'
 import { geocoder } from '../providers/geocoding'
-import { uid } from '../types'
+import { uid, type Feature } from '../types'
 import { ringLabelPoints } from './rings'
 import { hasMarker, markerById, markerImageId, pinSvg } from './markers'
+import { DOT_RADIUS, dotRadius, pinScale, pointSizeRatios } from './pointSize'
 
 setWorkerUrl(maplibreWorkerUrl)
 
@@ -106,6 +107,8 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
   const features = useStore((s) => s.features)
   const layers = useStore((s) => s.layers)
   const selectedId = useStore((s) => s.selectedId)
+  // 레이어 sizeField 로 정한 포인트 크기 비율. 셀렉터 밖에서 파생한다 (CLAUDE.md 함정: 셀렉터 안 파생 금지).
+  const sizeRatios = useMemo(() => pointSizeRatios(features, layers), [features, layers])
 
   /* ---------------- 지도 생성 ---------------- */
   useEffect(() => {
@@ -171,6 +174,9 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
           'icon-anchor': 'bottom',
           'icon-allow-overlap': true,
           'icon-ignore-placement': true,
+          'icon-size': ['coalesce', ['get', 'scale'], 1],
+          // 겹치면 레이어 순서가 뒤인(패널 아래쪽) 레이어의 핀이 위에 온다. 낮은 키부터 그린다.
+          'symbol-sort-key': ['coalesce', ['get', 'order'], 0],
         },
       })
 
@@ -200,7 +206,8 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
     const iconed = (f: GeoJSONStoreFeatures) => hasMarker(f.properties?.icon)
     const pointStyles = {
       pointColor: layerColor,
-      pointWidth: 6,
+      // 크기는 동기화 이펙트가 properties.size 에 넣어 둔다 (tdStyleProps).
+      pointWidth: (f: GeoJSONStoreFeatures) => (typeof f.properties?.size === 'number' ? f.properties.size : DOT_RADIUS),
       pointOutlineColor: '#ffffff' as HexColor,
       pointOutlineWidth: 2,
       pointOpacity: (f: GeoJSONStoreFeatures) => (iconed(f) ? 0 : 1),
@@ -345,13 +352,19 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
        이게 빠져 있어서 스토어·IndexedDB 에서는 지워졌는데 도형이 지도에 계속 그려졌다.
 
      미완성(작도 중) 도형을 지우지 않으려고, 한 번이라도 스토어에 올라갔던 id 만 제거 대상으로 본다.
-     작도 중인 도형은 아직 스토어에 없으므로 syncedIds 에도 없다. */
+     작도 중인 도형은 아직 스토어에 없으므로 syncedIds 에도 없다.
+
+     숨긴 레이어의 도형은 Terra Draw 에 올리지 않는다(켜면 다시 채운다). 투명하게만 두면 점이 남고
+     클릭도 잡혔다. 추가·제거는 배치 한 번이라 3,950 도형에서도 빠르다 — 도형마다
+     updateFeatureProperties 를 부르면 호출마다 전체를 다시 그려 13초가 걸렸다 (2026-09-29 실측). */
   useEffect(() => {
     const draw = drawRef.current
     if (!mapReady || !draw || !ready) return
 
-    const drawable = features.filter((f) => !f.derivedFrom)
+    const hidden = new Set(layers.filter((l) => !l.visible).map((l) => l.id))
+    const drawable = features.filter((f) => !f.derivedFrom && !hidden.has(f.layerId))
     const storeIds = new Set(drawable.map((f) => f.id))
+    const colorOf = new Map(layers.map((l) => [l.id, l.style.color]))
 
     const missing = drawable.filter((f) => !draw.hasFeature(f.id))
     if (missing.length) {
@@ -360,7 +373,7 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
           type: 'Feature' as const,
           id: f.id,
           geometry: f.geometry,
-          properties: { mode: modeForGeometry(f.geometry.type), layerId: f.layerId },
+          properties: { mode: modeForGeometry(f.geometry.type), ...tdStyleProps(f, colorOf, sizeRatios) },
         })) as GeoJSONStoreFeatures[],
       )
       // addFeatures 는 거부된 피처를 예외 없이 되돌려준다. 조용히 사라지면 원인을 찾기 어렵다.
@@ -376,7 +389,7 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
       if (present.length) draw.removeFeatures(present)
       orphans.forEach((id) => syncedIds.current.delete(id))
     }
-  }, [mapReady, ready, features])
+  }, [mapReady, ready, features, layers, sizeRatios])
 
   /* ---------------- 배경지도 ---------------- */
   useEffect(() => {
@@ -507,6 +520,8 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
           geometry: f.geometry,
           properties: {
             iconKey: markerImageId(String(f.properties.icon), colorOf(f.layerId)),
+            scale: pinScale(sizeRatios.get(f.id)),
+            order: layerOf(f.layerId)?.order ?? 0,
           },
         })),
       })
@@ -516,29 +531,23 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
     return () => {
       cancelled = true
     }
-  }, [features, layers, mapReady])
+  }, [features, layers, mapReady, sizeRatios])
 
-  /* ---------------- 레이어 표시/숨김 ---------------- */
+  /* ---------------- 아이콘·색 반영 ---------------- */
+  // 스타일 콜백은 Terra Draw 가 들고 있는 properties 를 본다. 스토어만 고치면 다시 칠해지지 않는다.
+  // 올릴 때 이미 넣었으므로(동기화 이펙트) 여기서는 바뀐 도형만 알린다 — 호출마다 전체를 다시 그린다.
   useEffect(() => {
     const draw = drawRef.current
     if (!mapReady || !draw) return
-    const iconOf = new Map(features.map((f) => [f.id, f.properties.icon]))
-    const styleOf = new Map(layers.map((l) => [l.id, l.style.color]))
-    const hidden = new Set(layers.filter((l) => !l.visible).map((l) => l.id))
-    // Terra Draw 는 레이어 개념이 없으므로 숨긴 레이어의 도형은 스토어에서 제거하지 않고
-    // 투명도로 감춘다. 스타일 콜백이 레이어를 다시 읽도록 강제 갱신한다.
-    draw.getSnapshot().forEach((f) => {
-      const layerId = f.properties?.layerId
-      if (typeof layerId !== 'string' || !f.id) return
-      const icon = iconOf.get(String(f.id))
-      // 스타일 콜백은 Terra Draw 가 들고 있는 properties 를 본다. 스토어만 고치면 다시 칠해지지 않는다.
-      draw.updateFeatureProperties(f.id, {
-        hidden: hidden.has(layerId),
-        icon: typeof icon === 'string' ? icon : null,
-        color: styleOf.get(layerId) ?? null,
-      })
+    const colorOf = new Map(layers.map((l) => [l.id, l.style.color]))
+    features.forEach((f) => {
+      if (f.derivedFrom || !draw.hasFeature(f.id)) return
+      const want = tdStyleProps(f, colorOf, sizeRatios)
+      const have = draw.getSnapshotFeature(f.id)?.properties
+      if (have && have.layerId === want.layerId && have.icon === want.icon && have.color === want.color && have.size === want.size) return
+      draw.updateFeatureProperties(f.id, want)
     })
-  }, [layers, features, mapReady])
+  }, [layers, features, mapReady, sizeRatios])
 
   /* ---------------- 선택 동기화 ---------------- */
   useEffect(() => {
@@ -582,4 +591,15 @@ function modeForGeometry(type: string): string {
   if (type === 'Point') return 'point'
   if (type === 'LineString') return 'linestring'
   return 'polygon'
+}
+
+/** Terra Draw 쪽에 들고 있어야 하는 스타일 입력. 스타일 콜백(iconed·layerColor·pointWidth)이 이것을 읽는다. */
+function tdStyleProps(f: Feature, colorOf: Map<string, string>, sizeRatios: Map<string, number>) {
+  const icon = f.properties.icon
+  return {
+    layerId: f.layerId,
+    icon: typeof icon === 'string' ? icon : null,
+    color: colorOf.get(f.layerId) ?? null,
+    size: f.geometry.type === 'Point' ? dotRadius(sizeRatios.get(f.id)) : null,
+  }
 }

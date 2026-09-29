@@ -98,6 +98,8 @@ export interface LayerStyle {
   opacity: number
   strokeWidth: number
   pointRadius: number
+  /** 포인트 크기를 정할 숫자 속성 키. 값에 면적이 비례한다 (src/map/pointSize.ts). 없으면 모두 같은 크기. */
+  sizeField?: string
 }
 
 export interface Layer {

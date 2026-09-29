@@ -49,6 +49,8 @@ export const MARKER_ICONS: MarkerIcon[] = [
     paths: ['M12 2.5l2.9 6.1 6.6.9-4.8 4.6 1.2 6.5L12 17.5 6.1 20.6l1.2-6.5L2.5 9.5l6.6-.9z'],
   },
   { id: 'flag', label: '깃발', paths: ['M6 2.5h1.7v19H6z', 'M9 3.5h10.5l-2.5 4 2.5 4H9z'] },
+  // 순위 번호. 두 자리는 핀 안에 들어가지 않아 9 까지만 둔다.
+  ...Array.from({ length: 9 }, (_, i) => ({ id: `n${i + 1}`, label: `${i + 1}`, text: `${i + 1}` })),
 ]
 
 export const markerById = (id: string | undefined): MarkerIcon | undefined =>
