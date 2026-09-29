@@ -31,6 +31,7 @@ npm test            # node --test 'tests/**/*.test.ts' — 순수 함수(매퍼�
 node --test tests/mappers.test.ts   # 단일 파일. Node 22 가 .ts 를 타입 제거로 바로 돌린다
 node scripts/lead50/run.ts <projectId> [--only 코드,…] [--dry-run]   # 월간선도50 갱신 (월 1회). 스펙 docs/superpowers/specs/2026-09-27-lead50-layer-design.md
 node scripts/lead50/top9.ts <projectId> [--dry-run]   # TOP9 사본만 다시 맞춤 (Supabase 키만 필요). run.ts 가 끝에서 자동으로 부른다
+node scripts/lead50/price.ts <projectId> [--dry-run]  # 진입가 구간 레이어 6개 (3/5/6.5/8/12억). 거래 블록에서 계산, run.ts 가 끝에서 자동으로 부른다
 node scripts/transit/run.ts <projectId> <GTFS_DataSet 경로> [--dry-run]   # 지하철 호선 24(역만) + 역세권·선릉/여의도/시청 30분·1시간 레이어. lead50 갱신 뒤 다시 돌린다. 스펙 docs/superpowers/specs/2026-09-29-transit-layers-design.md
 ```
 
@@ -257,6 +258,7 @@ Design Compiler 목업(`<x-dc>` + `text/x-dc` 스크립트)이다. **실행 가�
 - `.env` 의 타일 키와 검색 키가 같은 값이라 dev 프록시가 검색 키를 가려주지 못하고, 두 키 모두 공개 저장소에 노출돼 있다.
   **사용자가 재발급하지 않고 유지하기로 결정했다** (HANDOFF 6번) — 다시 권하지 마라.
 - 번들이 1.82MB(gzip 494KB)이고 코드 스플리팅을 하지 않았다.
+- **스키마 밖 숫자 속성은 정보 페이지에서 "비어 있음" 으로 보인다** (`InfoPage` 가 자유 필드를 전부 `type: 'text'` 로 그린다). 스크립트가 만드는 레이어는 스키마에 필드를 넣어 피한다.
 - 목록은 `ui/FeatureList.tsx` 가 우측 패널(모바일은 바텀시트)에 상시 띄운다. 행을 누르면
   point 는 `flyTo`, 나머지는 bbox `fitBounds` 로 이동한 뒤 정보 페이지를 연다.
   정렬·필터가 붙는 **테이블 뷰**는 여전히 Phase 2 다.

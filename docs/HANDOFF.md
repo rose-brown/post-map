@@ -22,6 +22,9 @@ Phase 2 는 계획만 있고 손대지 않았다.
 ("역 500m 이내", "선릉/여의도/시청 30분·1시간 이내", 모두 `(월간선도50)` 사본)가 있다. **교통 레이어는 전부 기본 숨김**(사용자 요청). 원본 단지에는
 `nearestStation·stationDistance·minSeolleung·minYeouido·minCityHall` 속성이 붙었다 (2km 안에 역이 없는 434개는 키 없음).
 출처는 KTDB GTFS 2025-03 (평일 1일, 대기시간 미포함). **월간선도50 을 갱신하면 `scripts/transit/run.ts` 도 다시 돌린다.**
+
+**진입가 구간 레이어 (2026-09-29)** — "진입가 3억 미만 / 3~5억 / 5~6.5억 / 6.5~8억 / 8~12억 / 12억 이상 (월간선도50)" 6개 (468/634/444/329/523/810, 기본 숨김).
+진입가 = 평형별 최근 거래 중 최저 (`entryTrade`). 거래 없는 80단지는 없다. lead50 스펙 D13, `scripts/lead50/price.ts`.
 설계 `docs/superpowers/specs/2026-09-29-transit-layers-design.md`, 기록 `docs/log/2026-09-29.md`.
 
 `npm test` 통과 · `npm run typecheck` 통과 · `npm run build` 통과.
