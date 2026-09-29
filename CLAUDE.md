@@ -31,7 +31,7 @@ npm test            # node --test 'tests/**/*.test.ts' — 순수 함수(매퍼�
 node --test tests/mappers.test.ts   # 단일 파일. Node 22 가 .ts 를 타입 제거로 바로 돌린다
 node scripts/lead50/run.ts <projectId> [--only 코드,…] [--dry-run]   # 월간선도50 갱신 (월 1회). 스펙 docs/superpowers/specs/2026-09-27-lead50-layer-design.md
 node scripts/lead50/top9.ts <projectId> [--dry-run]   # TOP9 사본만 다시 맞춤 (Supabase 키만 필요). run.ts 가 끝에서 자동으로 부른다
-node scripts/transit/run.ts <projectId> <GTFS_DataSet 경로> [--dry-run]   # 지하철 호선 24 + 역세권·선릉/여의도/시청 30분·1시간 레이어. lead50 갱신 뒤 다시 돌린다. 스펙 docs/superpowers/specs/2026-09-29-transit-layers-design.md
+node scripts/transit/run.ts <projectId> <GTFS_DataSet 경로> [--dry-run]   # 지하철 호선 24(역만) + 역세권·선릉/여의도/시청 30분·1시간 레이어. lead50 갱신 뒤 다시 돌린다. 스펙 docs/superpowers/specs/2026-09-29-transit-layers-design.md
 ```
 
 배포: **`main` 에 push 하면** `.github/workflows/deploy.yml` 이 빌드해 GitHub Pages(`/post-map/`)에 올린다.
