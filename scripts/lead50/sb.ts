@@ -5,6 +5,7 @@
 import { mergeSchema } from './build.ts'
 import type { LayerDef } from './build.ts'
 import type { FeatureRow, LayerRow } from '../../src/db/mappers.ts'
+import type { PropertySchemaField } from '../../src/types.ts'
 
 export type Sb = (path: string, init?: RequestInit) => Promise<unknown>
 
@@ -45,21 +46,25 @@ export function findLayer(layers: LayerRow[], name: string): LayerRow | undefine
 /**
  * 이름으로 찾아 스키마를 갱신하거나, 없으면 만든다 (layers 배열에도 넣는다 — 다음 order 계산용).
  * 기존 레이어의 스타일은 sizeField 키가 없을 때만 채운다 — 색·표시 상태 등 사용자가 바꾼 것은 덮지 않는다.
- * dryRun 이면 쓰지 않고 만들 id 만 돌려준다.
+ * dryRun 이면 쓰지 않고 만들 id 만 돌려준다. merge 는 기존 스키마 → 쓸 스키마 (기본은 월간선도50, scripts/transit 이 자기 것을 넘긴다).
  */
-export async function ensureLayer(sb: Sb, projectId: string, layers: LayerRow[], def: LayerDef, newId: string, dryRun: boolean): Promise<LayerRow> {
+export async function ensureLayer(
+  sb: Sb, projectId: string, layers: LayerRow[], def: LayerDef, newId: string, dryRun: boolean,
+  merge: (existing: PropertySchemaField[]) => PropertySchemaField[] = mergeSchema,
+): Promise<LayerRow> {
   const found = findLayer(layers, def.name)
   if (found) {
     const style = def.sizeField && !('sizeField' in found.style) ? { ...found.style, sizeField: def.sizeField } : found.style
-    if (!dryRun) await sb(`layers?id=eq.${found.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ schema: mergeSchema(found.schema), style }) })
+    if (!dryRun) await sb(`layers?id=eq.${found.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ schema: merge(found.schema), style }) })
     found.style = style
+    found.schema = merge(found.schema)
     return found
   }
   const layer: LayerRow = {
     id: newId, project_id: projectId, name: def.name, kind: 'vector', visible: def.visible,
     order: layers.reduce((m, l) => Math.max(m, l.order), -1) + 1,
     style: { color: def.color, opacity: 0.25, strokeWidth: 2, pointRadius: 6, ...(def.sizeField ? { sizeField: def.sizeField } : {}) },
-    schema: mergeSchema([]), locked: false,
+    schema: merge([]), locked: false,
   }
   if (!dryRun) await sb('layers', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(layer) })
   layers.push(layer)
