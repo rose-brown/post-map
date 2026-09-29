@@ -14,6 +14,7 @@ import type { Complex, KbRankItem, Region, Trade } from './build.ts'
 import { KbHttpError, fetchComplex, fetchRanking, fetchRegions } from './kb.ts'
 import { fetchTrades, recentMonths } from './molit.ts'
 import { syncTop } from './top9.ts'
+import { syncPrice } from './price.ts'
 import { ensureLayer, readLayerFeatures, readLayers, supabaseClient, upsertFeatures } from './sb.ts'
 import type { FeatureRow, LayerRow } from '../../src/db/mappers.ts'
 
@@ -122,3 +123,4 @@ console.error(`기록 완료: ${rows.length + retired.length}행 (신규 ${creat
 
 // 구간 레이어가 다 써진 뒤에 사본을 맞춘다 (계획 2026-09-29 T6).
 await syncTop(sb, projectId, false)
+await syncPrice(sb, projectId, false)

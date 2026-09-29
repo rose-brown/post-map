@@ -4,6 +4,7 @@ import {
   SCHEMA, TRADES_BLOCK_ID, STAR_RANK, leafRegions, jibunOf, dongOf, matchTrades, summarizeTrades, formatPrice,
   recentTradeLine, tradesBlock, buildProperties, mergeSchema, mergeFeature, duplicateIds, sggCodesFor, rankIcon,
   regionPrefix, retireRows, topRows, bandOf, BAND_LAYERS,
+  entryTradeLine, parsePrice, parseTradesBlock, priceBandOf, priceRows, PRICE_LAYERS,
 } from '../scripts/lead50/build.ts'
 import type { Complex, Trade } from '../scripts/lead50/build.ts'
 import type { FeatureRow } from '../src/db/mappers.ts'
@@ -267,3 +268,57 @@ test('topRows: 최신 기준월의 1~9 위만, 우리 속성·거래 블록만 �
   assert.equal(out[0].title, 'T1')
   assert.equal(out[0].updated_at, 'NOW')
 })
+
+test('entryTradeLine: 평형별 최신 거래 중 가장 싼 것', () => {
+  const g = summarizeTrades([
+    t({ area: 59.9, price: 72000, ymd: '2026-08-02', floor: '12' }),
+    t({ area: 59.9, price: 60000, ymd: '2026-01-02' }),            // 옛 거래 — 최신만 본다
+    t({ area: 84.6, price: 95000 }),
+  ], '2025-10-01')
+  assert.equal(entryTradeLine(g), '60㎡ 7억 2,000 · 26.08.02 · 12층')
+  assert.equal(entryTradeLine([]), undefined)
+})
+
+test('parsePrice: formatPrice 의 역', () => {
+  for (const v of [3500, 9500, 10000, 72000, 171000, 790000]) assert.equal(parsePrice(formatPrice(v)), v)
+  assert.ok(Number.isNaN(parsePrice('')))
+  assert.ok(Number.isNaN(parsePrice('가격')))
+})
+
+test('parseTradesBlock: tradesBlock 을 되살린다', () => {
+  const groups = summarizeTrades([t({ area: 59.9, price: 70000, floor: '3' }), t({ area: 84.6, price: 171000, floor: '-1' }), t({ area: 84.6, ymd: '2026-02-01' })], '2025-10-01')
+  const back = parseTradesBlock(tradesBlock(groups)!.text!)
+  assert.deepEqual(back.map((g) => [g.area, g.count, g.latest.price, g.latest.ymd, g.latest.floor]),
+    groups.map((g) => [g.area, g.count, g.latest.price, g.latest.ymd, g.latest.floor]))
+  assert.deepEqual(parseTradesBlock('매매 실거래 (최근 12개월)\n엉뚱한 줄'), [])
+})
+
+test('priceBandOf: 3 / 5 / 6.5 / 8 / 12억 경계는 위 구간', () => {
+  assert.deepEqual([29999, 30000, 49999, 50000, 64999, 65000, 79999, 80000, 119999, 120000, 790000].map(priceBandOf), [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5])
+  assert.equal(PRICE_LAYERS.length, 6)
+  assert.equal(new Set(PRICE_LAYERS.map((l) => l.color)).size, 6)
+})
+
+test('priceRows: 원본에 진입가, 사본은 단지당 하나·구간 레이어·거래 블록만', () => {
+  const block = tradesBlock(summarizeTrades([t({ area: 59.9, price: 72000 }), t({ area: 84.6, price: 95000 })], '2025-10-01'))!
+  const f: FeatureRow = {
+    id: 'ftr_a', project_id: 'p', layer_id: 'lyr_band', parent_id: null, geometry: { type: 'Point', coordinates: [127, 37] },
+    title: '단지', properties: { kbComplexId: '1', memo: 'x' }, blocks: [block, { id: 'blk_user', type: 'gallery', refs: [] }],
+    derived_from: null, created_at: 'c', updated_at: 'u',
+  }
+  const noTrade: FeatureRow = { ...f, id: 'ftr_b', blocks: [] }
+  const drawn: FeatureRow = { ...f, id: 'ftr_c', properties: {} }
+  const layerIds = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5']
+  const { originals, copies } = priceRows([f, noTrade, drawn], layerIds, 'now')
+  assert.equal(originals.length, 1)
+  assert.equal(originals[0].properties.entryTrade, '60㎡ 7억 2,000 · 26.08.01 · 10층')
+  assert.equal(originals[0].updated_at, 'now')
+  assert.equal(copies[0].id, 'ftr_a__price')
+  assert.equal(copies[0].layer_id, 'L3')                      // 7.2억 → 6.5~8억
+  assert.equal(copies[0].properties.memo, 'x')
+  assert.deepEqual(copies[0].blocks.map((b) => b.id), [TRADES_BLOCK_ID])
+  // 이미 같은 진입가면 원본은 그대로 (updated_at 유지)
+  const again = priceRows([originals[0]], layerIds, 'later')
+  assert.equal(again.originals[0].updated_at, 'now')
+})
+

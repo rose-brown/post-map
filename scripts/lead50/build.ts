@@ -46,6 +46,7 @@ const STAR_ICON = 'star'
 /** 스펙 4.2. 순서 = 정보 카드 표시 순서 (D9: 실거래가 맨 위). */
 export const SCHEMA: PropertySchemaField[] = [
   { key: 'recentTrade', label: '최근 매매', type: 'text' },
+  { key: 'entryTrade', label: '진입가', type: 'text' },
   { key: 'rank', label: '순위', type: 'number' },
   { key: 'households', label: '총세대수', type: 'number', unit: '세대' },
   { key: 'generalHouseholds', label: '일반세대수', type: 'number', unit: '세대' },
@@ -178,11 +179,47 @@ export function formatPrice(manwon: number): string {
 
 const shortDate = (ymd: string) => ymd.slice(2).replaceAll('-', '.')
 
+const tradeLine = (g: AreaGroup) => `${g.area}㎡ ${formatPrice(g.latest.price)} · ${shortDate(g.latest.ymd)} · ${g.latest.floor}층`
+
 export function recentTradeLine(groups: AreaGroup[]): string | undefined {
   const top = [...groups].sort((a, b) => b.count - a.count || a.area - b.area)[0]
-  if (!top) return undefined
-  const l = top.latest
-  return `${top.area}㎡ ${formatPrice(l.price)} · ${shortDate(l.ymd)} · ${l.floor}층`
+  return top && tradeLine(top)
+}
+
+/** 진입가 = 평형별 최신 거래 중 가장 싼 것 (사용자 결정 2026-09-29). 같으면 작은 평형. */
+export function entryGroup(groups: AreaGroup[]): AreaGroup | undefined {
+  return [...groups].sort((a, b) => a.latest.price - b.latest.price || a.area - b.area)[0]
+}
+
+export function entryTradeLine(groups: AreaGroup[]): string | undefined {
+  const g = entryGroup(groups)
+  return g && tradeLine(g)
+}
+
+/** formatPrice 의 역. "17억 1,000" · "17억" · "9,500만" → 만원. 형식이 아니면 NaN. */
+export function parsePrice(s: string): number {
+  const m = /^(?:(\d+)억)?\s*(?:([\d,]+)만?)?$/.exec(s.trim())
+  if (!m || (!m[1] && !m[2])) return NaN
+  return Number(m[1] ?? 0) * 10000 + Number((m[2] ?? '0').replaceAll(',', ''))
+}
+
+/**
+ * tradesBlock 의 역 — 서버에 이미 있는 거래 블록에서 평형별 최신 거래를 되살린다 (국토부를 다시 부르지 않고 진입가를 채우기 위해).
+ * 동·지번·단지명은 블록에 없어서 빈 값이다. 형식이 맞지 않는 줄은 버린다.
+ */
+export function parseTradesBlock(text: string): AreaGroup[] {
+  const out: AreaGroup[] = []
+  for (const line of text.split('\n').slice(1)) {
+    const m = /^(\d+)㎡ {2}(.+?) {2}(\d{2})\.(\d{2})\.(\d{2}) {2}(\S+)층 {2}\((\d+)건\)$/.exec(line)
+    if (!m) continue
+    const price = parsePrice(m[2])
+    if (!Number.isFinite(price)) continue
+    out.push({
+      area: Number(m[1]), count: Number(m[7]),
+      latest: { dong: '', jibun: '', aptName: '', area: Number(m[1]), price, ymd: `20${m[3]}-${m[4]}-${m[5]}`, floor: m[6], cancelled: false },
+    })
+  }
+  return out
 }
 
 export function tradesBlock(groups: AreaGroup[]): Block | undefined {
@@ -195,6 +232,7 @@ export function buildProperties(c: Complex, groups: AreaGroup[]): Properties {
   const { item, detail } = c
   const p: Record<string, string | number | undefined> = {
     recentTrade: recentTradeLine(groups),
+    entryTrade: entryTradeLine(groups),
     rank: item.rank,
     households: detail.households,
     generalHouseholds: item.generalHouseholds,
@@ -320,4 +358,51 @@ export function topRows(source: FeatureRow[], layerId: string, now: string): Fea
         updated_at: now,
       }
     })
+}
+
+/* ---------- 진입가 구간 레이어 (사용자 결정 2026-09-29) ---------- */
+
+/**
+ * 진입가(만원) 경계. 3 / 5 / 6.5 / 8 / 12억 — 소형이 몰리는 8억 아래를 촘촘하게, 8억을 경계로.
+ * 색은 농도가 아니라 색상으로 구분한다 (사용자: 진하기 차이는 눈에 안 띈다). 8억 미만 넷은 원색, 그 위는 보라·회색.
+ */
+export const PRICE_CUTS = [30000, 50000, 65000, 80000, 120000]
+export const PRICE_LAYERS: LayerDef[] = [
+  { name: '진입가 3억 미만 (월간선도50)', color: '#2563eb', visible: false, sizeField: SIZE_FIELD },
+  { name: '진입가 3~5억 (월간선도50)', color: '#16a34a', visible: false, sizeField: SIZE_FIELD },
+  { name: '진입가 5~6.5억 (월간선도50)', color: '#f59e0b', visible: false, sizeField: SIZE_FIELD },
+  { name: '진입가 6.5~8억 (월간선도50)', color: '#dc2626', visible: false, sizeField: SIZE_FIELD },
+  { name: '진입가 8~12억 (월간선도50)', color: '#7c3aed', visible: false, sizeField: SIZE_FIELD },
+  { name: '진입가 12억 이상 (월간선도50)', color: '#4b5563', visible: false, sizeField: SIZE_FIELD },
+]
+
+export const priceBandOf = (manwon: number): number => PRICE_CUTS.filter((c) => manwon >= c).length
+
+/**
+ * 원본 단지 → (진입가를 채운 원본, 가격 구간 사본). 거래 블록이 없는 단지는 둘 다 없다.
+ * 사본 id 는 단지당 하나라 구간이 바뀌면 같은 도형이 레이어를 옮긴다. 속성은 전부, 블록은 거래 블록만 복사한다
+ * (이미지 블록을 두 도형이 공유하지 않게 — TOP9 와 같은 이유).
+ */
+export function priceRows(source: FeatureRow[], layerIds: string[], now: string): { originals: FeatureRow[]; copies: FeatureRow[] } {
+  const originals: FeatureRow[] = []
+  const copies: FeatureRow[] = []
+  for (const f of source) {
+    if (f.derived_from || f.parent_id || !f.properties.kbComplexId) continue
+    const block = f.blocks.find((b) => b.id === TRADES_BLOCK_ID)
+    const g = entryGroup(parseTradesBlock(block?.text ?? ''))
+    if (!g) continue
+    const properties: Properties = { ...f.properties, entryTrade: tradeLine(g) }
+    const original = properties.entryTrade === f.properties.entryTrade ? f : { ...f, properties, updated_at: now }
+    originals.push(original)
+    copies.push({
+      ...original,
+      id: `${f.id}__price`,
+      layer_id: layerIds[priceBandOf(g.latest.price)],
+      parent_id: null,
+      blocks: block ? [block] : [],
+      derived_from: null,
+      updated_at: now,
+    })
+  }
+  return { originals, copies }
 }
