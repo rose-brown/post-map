@@ -29,6 +29,7 @@ npm run typecheck   # tsc -b --noEmit
 npm test            # node --test 'tests/**/*.test.ts' — 순수 함수(매퍼·링크 결정·lead50)만. glob 따옴표 필수
 node --test tests/mappers.test.ts   # 단일 파일. Node 22 가 .ts 를 타입 제거로 바로 돌린다
 node scripts/lead50/run.ts <projectId> [--only 코드,…] [--dry-run]   # 월간선도50 갱신 (월 1회). 스펙 docs/superpowers/specs/2026-09-27-lead50-layer-design.md
+node scripts/lead50/top9.ts <projectId> [--dry-run]   # TOP9 사본만 다시 맞춤 (Supabase 키만 필요). run.ts 가 끝에서 자동으로 부른다
 ```
 
 배포: **`main` 에 push 하면** `.github/workflows/deploy.yml` 이 빌드해 GitHub Pages(`/post-map/`)에 올린다.
@@ -167,6 +168,11 @@ Phase 1 구현 중 실제로 시간을 잡아먹은 것들이다. 같은 것을 
   도형이 지도에 계속 그려져서 "삭제가 안 된다"로 보인다. 지금은 동기화 이펙트가 양방향이라
   (`syncedIds` 기준으로 고아 제거) 정보 페이지 삭제·레이어 삭제·cascade 가 모두 덮인다.
   새 삭제 경로를 만들 때 이 이펙트를 우회하지 마라.
+- **숨긴 레이어의 도형은 Terra Draw 에 올리지 않는다** (`MapView` 동기화 이펙트). 투명하게만 두면 점이 남고 클릭도 잡혔다.
+  그리고 **도형마다 `updateFeatureProperties` 를 부르지 마라** — 호출마다 TD 가 전체를 다시 그려 3,950 도형에서 13초가 걸렸다.
+  추가·제거(`addFeatures`/`removeFeatures`)는 배치 한 번이다. 아이콘·색은 올릴 때 넣고 바뀐 것만 알린다.
+- **서버는 한 응답을 1000행으로 자른다** (PostgREST max-rows). `loadAll` 은 페이지를 이어 받는다.
+  목록을 읽는 새 경로도 같은 처리가 필요하다 (`featureIdsOfLayers` 는 아직 1000행에서 잘린다).
 - **비동기 초기화는 직렬화해야 한다.** `useStore.init()` 은 `initPromise` 로 묶여 있다. 이 가드가 없으면
   StrictMode 이중 마운트가 프로젝트를 두 개 만들고, 도형이 들어간 프로젝트와 화면이 로드한 프로젝트가 갈린다.
 - **Playwright 로 지도를 클릭할 때**: 정보 패널이 열리면 지도가 리사이즈되므로 화면 좌표를 **매번 다시** 계산해라.
@@ -241,7 +247,6 @@ Design Compiler 목업(`<x-dc>` + `text/x-dc` 스크립트)이다. **실행 가�
 - `.env` 의 타일 키와 검색 키가 같은 값이라 dev 프록시가 검색 키를 가려주지 못하고, 두 키 모두 공개 저장소에 노출돼 있다.
   **사용자가 재발급하지 않고 유지하기로 결정했다** (HANDOFF 6번) — 다시 권하지 마라.
 - 번들이 1.82MB(gzip 494KB)이고 코드 스플리팅을 하지 않았다.
-- 레이어 숨김이 Terra Draw 가 그리는 도형에는 적용되지 않는다 (TD 에 레이어 개념이 없다).
 - 목록은 `ui/FeatureList.tsx` 가 우측 패널(모바일은 바텀시트)에 상시 띄운다. 행을 누르면
   point 는 `flyTo`, 나머지는 bbox `fitBounds` 로 이동한 뒤 정보 페이지를 연다.
   정렬·필터가 붙는 **테이블 뷰**는 여전히 Phase 2 다.
