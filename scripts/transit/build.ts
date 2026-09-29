@@ -64,16 +64,13 @@ export const LINES: LineDef[] = [
   { gtfs: '김포도시철도', code: 'KP', layer: '지하철 김포골드라인', color: '#AD8605' },
 ]
 
+/** 역 포인트 반지름(px). 앱 기본(6)의 절반 — 사용자 요청 2026-09-29. */
+export const STATION_POINT_RADIUS = 3
+
 export const LINE_SCHEMA: PropertySchemaField[] = [
   { key: 'line', label: '호선', type: 'text' },
   { key: 'stopId', label: '역ID', type: 'text' },
 ]
-
-/** 역을 건너뛰는 패턴. 선을 그리지 않는다 (D3) — 시간 계산에는 쓴다. */
-export const isExpress = (r: Route): boolean => r.longName.includes('급행')
-
-/** "RR_ACC1_S-1-01-1D" → "RR_ACC1_S-1-01-1". 상·하행(내·외선)을 한 갈래로 묶는다. */
-export const patternOf = (routeId: string): string => routeId.replace(/[DUIO]$/, '')
 
 /** 운행별 정차 순서 (stop_sequence 오름차순). */
 export function tripSequences(stopTimes: StopTime[]): Map<string, StopTime[]> {
@@ -88,59 +85,6 @@ export function tripSequences(stopTimes: StopTime[]): Map<string, StopTime[]> {
 }
 
 export const routeOfTrip = (tripId: string): string => tripId.replace(/_Ord\d+$/, '')
-
-export interface LineOrder { key: string; route: Route; stops: string[] }
-
-/**
- * 갈래마다 선 (D3·D4). 급행 갈래는 뺀다. 운행을 정차역이 많은 순으로 보며 아직 안 그린 역간 구간이 있는
- * 운행만 선으로 남긴다 — 한 route 안에 지선이 섞인 경우(5호선 마천) 선이 둘이 되고, 회차 운행은 빠진다.
- * 순환선(2호선 본선·6호선 응암)은 한 운행이 한 바퀴를 넘을 수 있어 처음 되돌아온 역에서 끊는다.
- */
-export function lineStopOrders(routes: Route[], trips: Map<string, StopTime[]>): LineOrder[] {
-  const byId = new Map(routes.map((r) => [r.id, r]))
-  const byPattern = new Map<string, { route: Route; stops: string[] }[]>()
-  for (const [tripId, seq] of trips) {
-    const route = byId.get(routeOfTrip(tripId))
-    if (!route || isExpress(route)) continue
-    const stops: string[] = []
-    for (const st of seq) {
-      if (stops.includes(st.stopId)) { stops.push(st.stopId); break }
-      stops.push(st.stopId)
-    }
-    if (stops.length < 2) continue
-    const pattern = patternOf(route.id)
-    byPattern.set(pattern, [...(byPattern.get(pattern) ?? []), { route, stops }])
-  }
-  // 급행 표시 없이 역을 건너뛰는 운행이 있다 (경의중앙 문산→금촌, 경춘 회기→상봉, 2026-09-29 실측).
-  // 어떤 운행에서 a·b 사이에 다른 역이 끼면 a→b 는 건너뛴 현이다. 순환선 마지막 구간은 그 운행 안에서 이웃이라 걸리지 않는다.
-  const all = [...byPattern.values()].flat()
-  const tripsAt = new Map<string, number[]>()
-  all.forEach((t, i) => new Set(t.stops).forEach((s) => tripsAt.set(s, [...(tripsAt.get(s) ?? []), i])))
-  const gap = (t: { stops: string[] }, a: string, b: string) => {
-    let min = Infinity
-    t.stops.forEach((x, i) => t.stops.forEach((y, j) => { if (x === a && y === b) min = Math.min(min, Math.abs(i - j)) }))
-    return min
-  }
-  const isChord = (a: string, b: string) => {
-    const withB = new Set(tripsAt.get(b))
-    return (tripsAt.get(a) ?? []).some((i) => withB.has(i) && gap(all[i], a, b) > 1)
-  }
-  const out: LineOrder[] = []
-  for (const [pattern, list] of byPattern) {
-    const drawn = new Set<string>()
-    const edge = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`)
-    // 길이가 같으면 route id·역 순서로 고정 — 실행마다 같은 선이 같은 id 를 받게.
-    list.sort((a, b) => b.stops.length - a.stops.length || a.route.id.localeCompare(b.route.id) || a.stops.join().localeCompare(b.stops.join()))
-    for (const t of list) {
-      const edges = t.stops.slice(1).map((s, i) => edge(t.stops[i], s))
-      if (edges.every((e) => drawn.has(e))) continue
-      if (t.stops.slice(1).some((s, i) => isChord(t.stops[i], s))) continue
-      edges.forEach((e) => drawn.add(e))
-      out.push({ key: `${pattern}-${out.filter((o) => o.key.startsWith(`${pattern}-`)).length}`, ...t })
-    }
-  }
-  return out
-}
 
 /** 호선(short name) → 그 호선 운행이 서는 stop id. 직결 운행역은 두 호선에 다 들어간다. */
 export function stopsByLine(routes: Route[], trips: Map<string, StopTime[]>): Map<string, Set<string>> {
@@ -358,22 +302,6 @@ export function stationRow(s: Stop, line: LineDef, layerId: string, projectId: s
     geometry: { type: 'Point', coordinates: coord(s) },
     title: baseName(s.name),
     properties: { line: line.layer.replace(/^지하철 /, ''), stopId: s.id },
-    blocks: [],
-    derived_from: null,
-    created_at: now,
-    updated_at: now,
-  }
-}
-
-export function lineRow(pattern: string, route: Route, stops: Stop[], line: LineDef, layerId: string, projectId: string, now: string): FeatureRow {
-  return {
-    id: `ftr_line_${pattern.slice(ROUTE_PREFIX.length)}`,
-    project_id: projectId,
-    layer_id: layerId,
-    parent_id: null,
-    geometry: { type: 'LineString', coordinates: stops.map(coord) },
-    title: route.longName.replace(/<[^>]*>$/, ''),
-    properties: { line: line.layer.replace(/^지하철 /, '') },
     blocks: [],
     derived_from: null,
     created_at: now,

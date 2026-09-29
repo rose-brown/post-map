@@ -7,8 +7,8 @@
  */
 import { fileURLToPath } from 'node:url'
 import {
-  FILTER_LAYERS, LINES, TARGETS, appendTransitSchema, buildReverseGraph, copyRow, filterSchema, isComplex, lineRow,
-  lineSchema, lineStopOrders, secondsTo, stationRow, stopsByLine, targetStops, transitProps, tripSequences, withTransit,
+  FILTER_LAYERS, LINES, STATION_POINT_RADIUS, TARGETS, appendTransitSchema, buildReverseGraph, copyRow, filterSchema, isComplex,
+  lineSchema, secondsTo, stationRow, stopsByLine, targetStops, transitProps, tripSequences, withTransit,
 } from './build.ts'
 import { readGtfs } from './gtfs.ts'
 import { BAND_LAYERS, OUT_LAYER, SIZE_FIELD } from '../lead50/build.ts'
@@ -50,12 +50,11 @@ for (const l of sources) originals.push(...(await readLayerFeatures(sb, l.id)).f
 /* ---------- 3. 계산 ---------- */
 const updated = originals.map((f) => withTransit(f, transitProps((f.geometry as Point).coordinates as [number, number], servedStops, toTargets), now))
 
-const orders = lineStopOrders(gtfs.routes, trips)
 const byLine = stopsByLine(gtfs.routes, trips)
 
 const report = {
   stops: servedStops.length, trips: trips.size, transfers: gtfs.transfers.length, complexes: updated.length,
-  lines: {} as Record<string, { stations: number; lines: number }>,
+  lines: {} as Record<string, number>,
   filters: {} as Record<string, number>,
   noStationWithin2km: updated.filter((f) => f.properties.nearestStation === undefined).length,
   samples: updated.slice(0, 5).map((f) => ({ title: f.title, ...Object.fromEntries(Object.entries(f.properties).filter(([k]) => ['nearestStation', 'stationDistance', ...TARGETS.map((t) => t.key)].includes(k))) })),
@@ -86,13 +85,15 @@ let deleted = 0
 
 for (const line of LINES) {
   const stationIds = [...(byLine.get(line.gtfs) ?? [])]
-  const patterns = orders.filter((o) => o.route.shortName === line.gtfs)
   const layer = await ensureLayer(sb, projectId, layers, { name: line.layer, color: line.color, visible: true }, `lyr_line_${line.code}_${tag}`, dryRun, lineSchema)
-  const rows = [
-    ...patterns.map((o) => lineRow(o.key, o.route, o.stops.map((id) => stopById.get(id)!), line, layer.id, projectId, now)),
-    ...stationIds.map((id) => stationRow(stopById.get(id)!, line, layer.id, projectId, now)),
-  ]
-  report.lines[line.layer] = { stations: stationIds.length, lines: patterns.length }
+  // 역은 앱 기본 점의 절반. ensureLayer 는 기존 스타일을 덮지 않으므로 여기서 맞춘다 (반지름을 바꾸는 UI 는 없다).
+  if (layer.style.pointRadius !== STATION_POINT_RADIUS) {
+    layer.style = { ...layer.style, pointRadius: STATION_POINT_RADIUS }
+    if (!dryRun) await sb(`layers?id=eq.${layer.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ style: layer.style }) })
+  }
+  // 선은 그리지 않는다 — 역을 직선으로 이은 선이 배경지도의 선로와 어긋났다 (사용자 요청 2026-09-29). 남은 선은 replaceLayer 가 지운다.
+  const rows = stationIds.map((id) => stationRow(stopById.get(id)!, line, layer.id, projectId, now))
+  report.lines[line.layer] = stationIds.length
   deleted += await replaceLayer(layer, rows)
 }
 

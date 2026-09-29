@@ -1,10 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  FILTER_LAYERS, appendTransitSchema, baseName, buildReverseGraph, copyRow, lineStopOrders, minutesVia, nearStops,
-  parseTime, patternOf, secondsTo, targetStops, transitProps, tripSequences, walkSeconds, withTransit, filterSchema,
+  FILTER_LAYERS, appendTransitSchema, baseName, buildReverseGraph, copyRow, minutesVia, nearStops,
+  parseTime, secondsTo, targetStops, transitProps, tripSequences, walkSeconds, withTransit, filterSchema,
 } from '../scripts/transit/build.ts'
-import type { Route, Stop, StopTime } from '../scripts/transit/build.ts'
+import type { Stop, StopTime } from '../scripts/transit/build.ts'
 import type { FeatureRow } from '../src/db/mappers.ts'
 
 const st = (tripId: string, stopId: string, seq: number, arrival: number): StopTime => ({ tripId, stopId, seq, arrival })
@@ -21,12 +21,6 @@ test('baseName: 끝 괄호만 뗀다', () => {
   assert.equal(baseName('시청·용인대'), '시청·용인대')
 })
 
-test('patternOf: 상·하행과 내·외선을 한 갈래로', () => {
-  assert.equal(patternOf('RR_ACC1_S-1-01-1D'), 'RR_ACC1_S-1-01-1')
-  assert.equal(patternOf('RR_ACC1_S-1-02-1O'), 'RR_ACC1_S-1-02-1')
-  assert.equal(patternOf('RR_ACC1_S-1-06-00'), 'RR_ACC1_S-1-06-00')
-})
-
 test('buildReverseGraph + secondsTo: 간선은 중앙값, 환승 포함, 방향 구분', () => {
   const trips = tripSequences([
     st('R_Ord001', 'A', 1, 0), st('R_Ord001', 'B', 2, 120), st('R_Ord001', 'C', 3, 300),
@@ -41,46 +35,6 @@ test('buildReverseGraph + secondsTo: 간선은 중앙값, 환승 포함, 방향 
   assert.equal(d.get('X'), 60)
   // 역방향 운행이 없으면 닿지 않는다
   assert.equal(secondsTo(g, ['A']).get('C'), undefined)
-})
-
-test('lineStopOrders: 갈래마다 가장 긴 운행, 급행 제외, 순환은 되돌아온 역에서 끊는다', () => {
-  const routes: Route[] = [
-    { id: 'L-1D', shortName: 'L', longName: 'L<하행>' },
-    { id: 'L-1U', shortName: 'L', longName: 'L<상행>' },
-    { id: 'L-2D', shortName: 'L', longName: 'L(급행)<하행>' },
-    { id: 'O-1I', shortName: 'O', longName: 'O<내선>' },
-  ]
-  const trips = tripSequences([
-    st('L-1D_Ord001', 'a', 1, 0), st('L-1D_Ord001', 'b', 2, 1),
-    st('L-1U_Ord001', 'c', 1, 0), st('L-1U_Ord001', 'b', 2, 1), st('L-1U_Ord001', 'a', 3, 2),
-    st('L-2D_Ord001', 'a', 1, 0), st('L-2D_Ord001', 'b', 2, 1), st('L-2D_Ord001', 'c', 3, 2), st('L-2D_Ord001', 'd', 4, 3),
-    st('O-1I_Ord001', 'p', 1, 0), st('O-1I_Ord001', 'q', 2, 1), st('O-1I_Ord001', 'r', 3, 2), st('O-1I_Ord001', 'p', 4, 3), st('O-1I_Ord001', 'q', 5, 4),
-  ])
-  const o = lineStopOrders(routes, trips)
-  assert.deepEqual(o.map((x) => x.key).sort(), ['L-1-0', 'O-1-0'])
-  assert.deepEqual(o.find((x) => x.key === 'L-1-0')!.stops, ['c', 'b', 'a'])   // 하행 a-b 는 이미 그린 구간
-  assert.deepEqual(o.find((x) => x.key === 'O-1-0')!.stops, ['p', 'q', 'r', 'p'])
-})
-
-test('lineStopOrders: 한 route 안의 지선은 선이 하나 더, 회차 운행은 빠진다', () => {
-  const routes: Route[] = [{ id: 'F-1D', shortName: 'F', longName: 'F<하행>' }]
-  const trips = tripSequences([
-    st('F-1D_Ord001', 'a', 1, 0), st('F-1D_Ord001', 'b', 2, 1), st('F-1D_Ord001', 'c', 3, 2), st('F-1D_Ord001', 'd', 4, 3),
-    st('F-1D_Ord002', 'a', 1, 0), st('F-1D_Ord002', 'b', 2, 1), st('F-1D_Ord002', 'x', 3, 2),   // 지선
-    st('F-1D_Ord003', 'b', 1, 0), st('F-1D_Ord003', 'c', 2, 1),                               // 회차
-  ])
-  assert.deepEqual(lineStopOrders(routes, trips).map((x) => x.stops), [['a', 'b', 'c', 'd'], ['a', 'b', 'x']])
-})
-
-test('lineStopOrders: 급행 표시 없이 역을 건너뛰는 운행은 선을 그리지 않는다', () => {
-  const routes: Route[] = [{ id: 'G-1D', shortName: 'G', longName: 'G<하행>' }]
-  const trips = tripSequences([
-    st('G-1D_Ord001', 'a', 1, 0), st('G-1D_Ord001', 'b', 2, 1), st('G-1D_Ord001', 'c', 3, 2),
-    st('G-1D_Ord002', 'a', 1, 0), st('G-1D_Ord002', 'c', 2, 1), st('G-1D_Ord002', 'd', 3, 2), st('G-1D_Ord002', 'e', 4, 3),
-    st('G-1D_Ord003', 'c', 1, 0), st('G-1D_Ord003', 'd', 2, 1),
-  ])
-  // Ord002 가 가장 길지만 a→c 는 Ord001 에서 b 를 끼고 있다 — 건너뛴 현
-  assert.deepEqual(lineStopOrders(routes, trips).map((x) => x.stops), [['a', 'b', 'c'], ['c', 'd']])
 })
 
 test('targetStops: 이름이 정확히 같은 역만, 없으면 실패', () => {
