@@ -18,6 +18,12 @@ Phase 2 는 계획만 있고 손대지 않았다.
 월 1회 `node scripts/lead50/run.ts <projectId> --dry-run` → 리포트 확인 → 옵션 없이 실행.
 설계 `docs/superpowers/specs/2026-09-27-lead50-layer-design.md`, 계획 `docs/superpowers/plans/2026-09-27-lead50-layer.md`.
 
+**지하철 레이어 (2026-09-29)** — 같은 프로젝트에 호선 레이어 24개(역 798 + 선 45, 노선색)와 필터 레이어 7개
+("역 500m 이내", "선릉/여의도/시청 30분·1시간 이내", 모두 `(월간선도50)` 사본, 기본 숨김)가 있다. 원본 단지에는
+`nearestStation·stationDistance·minSeolleung·minYeouido·minCityHall` 속성이 붙었다 (2km 안에 역이 없는 434개는 키 없음).
+출처는 KTDB GTFS 2025-03 (평일 1일, 대기시간 미포함). **월간선도50 을 갱신하면 `scripts/transit/run.ts` 도 다시 돌린다.**
+설계 `docs/superpowers/specs/2026-09-29-transit-layers-design.md`, 기록 `docs/log/2026-09-29.md`.
+
 `npm test` 통과 · `npm run typecheck` 통과 · `npm run build` 통과.
 `main` 은 원격과 같다.
 

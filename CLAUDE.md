@@ -26,10 +26,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev         # Vite dev 서버 (기본 5173). 검색·지오코딩 프록시는 여기서만 동작한다
 npm run build       # tsc -b && vite build
 npm run typecheck   # tsc -b --noEmit
-npm test            # node --test 'tests/**/*.test.ts' — 순수 함수(매퍼·링크 결정·lead50)만. glob 따옴표 필수
+npm test            # node --test 'tests/**/*.test.ts' — 순수 함수(매퍼·링크 결정·lead50·transit)만. glob 따옴표 필수
+                    # Windows(cmd)에서는 따옴표 glob 이 안 풀려 "tests 0" 으로 통과한 척한다 → node --test tests/*.test.ts
 node --test tests/mappers.test.ts   # 단일 파일. Node 22 가 .ts 를 타입 제거로 바로 돌린다
 node scripts/lead50/run.ts <projectId> [--only 코드,…] [--dry-run]   # 월간선도50 갱신 (월 1회). 스펙 docs/superpowers/specs/2026-09-27-lead50-layer-design.md
 node scripts/lead50/top9.ts <projectId> [--dry-run]   # TOP9 사본만 다시 맞춤 (Supabase 키만 필요). run.ts 가 끝에서 자동으로 부른다
+node scripts/transit/run.ts <projectId> <GTFS_DataSet 경로> [--dry-run]   # 지하철 호선 24 + 역세권·선릉/여의도/시청 30분·1시간 레이어. lead50 갱신 뒤 다시 돌린다. 스펙 docs/superpowers/specs/2026-09-29-transit-layers-design.md
 ```
 
 배포: **`main` 에 push 하면** `.github/workflows/deploy.yml` 이 빌드해 GitHub Pages(`/post-map/`)에 올린다.
@@ -185,6 +187,14 @@ Phase 1 구현 중 실제로 시간을 잡아먹은 것들이다. 같은 것을 
 - **Claude in Chrome 확장은 localhost 를 사이트 권한으로 막는다.** Playwright MCP 가 없으면
   `~/.npm/_npx/*/node_modules/playwright` + `~/Library/Caches/ms-playwright` 캐시 브라우저를
   `executablePath` 로 지정해 스크립트로 몬다. 다기기는 `localhost` 와 `127.0.0.1` 두 오리진으로 흉내 낸다.
+
+## 확인된 KTDB GTFS 사실 (2025-03판 실측, `scripts/transit`)
+
+- 원본은 저장소 루트의 `대중교통GTFS(2025년 기준)/` 에 두되 **커밋하지 않는다** (`.gitignore`, 1.4GB·재배포 조건 미확인).
+- 수도권 도시철도 = `route_id` 접두사 `RR_ACC1_S-1-`, 역 = `RS_ACC1_S-1-`. `route_type` 은 KTDB 자체 코드라 보지 않는다.
+- 역은 호선별로 따로 있다 (`시청(1호선)`). 직결 구간은 두 호선이 같은 stop_id 를 쓴다 (4호선·수인분당, 경의중앙·서해선).
+- **급행 표시 없이 역을 건너뛰는 운행**이 일반 route 안에 섞여 있다 — 선을 그릴 때 건너뛴 현을 걸러야 한다 (`lineStopOrders`).
+- `shapes.txt` 가 없다. 선은 역을 운행 순서로 이은 것이다. 나머지는 스펙 3절.
 
 ## 확인된 KB 데이터허브 · 국토부 실거래 API 사실 (실호출로 확인, `scripts/lead50`)
 
