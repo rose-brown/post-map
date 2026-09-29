@@ -6,7 +6,37 @@
 import type { FeatureRow } from '../../src/db/mappers.ts'
 import type { Block, Properties, PropertySchemaField } from '../../src/types.ts'
 
-export const LAYER_NAME = '월간선도50'
+export interface LayerDef { name: string; color: string; visible: boolean; sizeField?: string }
+
+/** 포인트 크기 기준 (앱의 레이어 style.sizeField). 총세대수에 면적이 비례한다 (사용자 요청 2026-09-29). */
+export const SIZE_FIELD = 'households'
+
+/**
+ * 순위 구간 레이어. 원본 한 레이어를 나눈 것이지 사본이 아니다 — 단지마다 도형은 하나이고,
+ * 순위가 바뀌면 같은 도형이 다른 구간으로 옮겨 가서 메모·블록이 따라간다 (사용자 결정 2026-09-29, D5 대체).
+ * visible 은 레이어를 처음 만들 때만 쓴다. 이후 켜고 끈 상태는 덮지 않는다.
+ */
+export const BAND_SIZE = 10
+export const BAND_LAYERS: LayerDef[] = [
+  { name: '월간선도50 TOP1~10 (시세총액)', color: '#b91c1c', visible: true, sizeField: SIZE_FIELD },
+  { name: '월간선도50 TOP11~20 (시세총액)', color: '#c2410c', visible: false, sizeField: SIZE_FIELD },
+  { name: '월간선도50 TOP21~30 (시세총액)', color: '#b45309', visible: false, sizeField: SIZE_FIELD },
+  { name: '월간선도50 TOP31~40 (시세총액)', color: '#4d7c0f', visible: false, sizeField: SIZE_FIELD },
+  { name: '월간선도50 TOP41~50 (시세총액)', color: '#0369a1', visible: false, sizeField: SIZE_FIELD },
+]
+/** 이번 순위에서 빠진 단지 (D6 — 지우지 않는다). */
+export const OUT_LAYER: LayerDef = { name: '월간선도50 순위 밖 (시세총액)', color: '#6b7280', visible: false, sizeField: SIZE_FIELD }
+
+/** 순위 → BAND_LAYERS 의 칸. KB 는 지역당 최대 50 이라 넘으면 응답이 바뀐 것이다. */
+export function bandOf(rank: number): number {
+  const i = Math.ceil(rank / BAND_SIZE) - 1
+  if (!Number.isInteger(rank) || i < 0 || i >= BAND_LAYERS.length) throw new Error(`구간 밖 순위: ${rank}`)
+  return i
+}
+
+/** 순위 1~TOP_RANK 사본 레이어. 스크립트가 통째로 소유한다 (계획 2026-09-29 T2). */
+export const TOP_LAYER_NAME = '월간선도50 TOP9 (시세총액)'
+export const TOP_RANK = 9
 export const TRADES_BLOCK_ID = 'blk_lead50_trades'
 
 /** 지역 순위가 이 값 이하인 단지에 ★ 를 붙인다 (사용자 결정 2026-09-27). */
@@ -244,18 +274,50 @@ export function regionPrefix(region: Region): string {
 }
 
 /**
- * 이번 실행에서 수집한 지역(`regions`)에 속하는데 이번 순위에 없는(`seenIds` 밖) 기존 도형 중
- * 아이콘이 ★ 인 것 — ★ 만 뗀 행을 돌려준다. 다른 속성·블록·시각은 그대로 (updated_at 만 now).
+ * 이번 실행에서 수집한 지역(`regions`)에 속하는데 이번 순위에 없는(`seenIds` 밖) 기존 단지 —
+ * 순위 밖 레이어로 옮기고 ★ 를 뗀 행을 돌려준다. 이미 옮겨졌고 ★ 도 없으면 건드리지 않는다.
+ * 다른 속성·블록·시각은 그대로 (updated_at 만 now). 사용자가 그린 도형(kbComplexId 없음)은 대상이 아니다.
  */
-export function dropStars(existing: FeatureRow[], seenIds: Set<string>, regions: Region[], now: string): FeatureRow[] {
+export function retireRows(existing: FeatureRow[], seenIds: Set<string>, regions: Region[], outLayerId: string, now: string): FeatureRow[] {
   const prefixes = regions.map(regionPrefix)
   return existing
-    .filter((f) => f.properties.icon === STAR_ICON)
-    .filter((f) => !seenIds.has(String(f.properties.kbComplexId ?? '')))
+    .filter((f) => f.properties.kbComplexId !== undefined && !seenIds.has(String(f.properties.kbComplexId)))
     .filter((f) => prefixes.some((p) => String(f.properties.region ?? '').startsWith(p)))
+    .filter((f) => f.layer_id !== outLayerId || f.properties.icon === STAR_ICON)
     .map((f) => {
       const properties = { ...f.properties }
-      delete properties.icon
-      return { ...f, properties, updated_at: now }
+      if (properties.icon === STAR_ICON) delete properties.icon
+      return { ...f, layer_id: outLayerId, properties, updated_at: now }
+    })
+}
+
+/**
+ * 원본 레이어 행 → TOP 레이어 사본 (계획 2026-09-29 T3·T4).
+ * 대상은 rank ≤ TOP_RANK 이고 baseMonth 가 원본의 최신 값인 도형 — D6 으로 남은 옛 순위를 뺀다.
+ * 좌표·제목·우리 속성·거래 블록만 복사하고 핀에 순위 번호(markers.ts 의 n1~n9)를 단다.
+ */
+export function topRows(source: FeatureRow[], layerId: string, now: string): FeatureRow[] {
+  const points = source.filter((f) => !f.derived_from && !f.parent_id && f.properties.kbComplexId)
+  const latest = points.reduce((m, f) => (String(f.properties.baseMonth ?? '') > m ? String(f.properties.baseMonth) : m), '')
+  return points
+    .filter((f) => String(f.properties.baseMonth ?? '') === latest)
+    .filter((f) => Number.isInteger(f.properties.rank) && Number(f.properties.rank) >= 1 && Number(f.properties.rank) <= TOP_RANK)
+    .map((f) => {
+      const properties: Properties = {}
+      for (const [k, v] of Object.entries(f.properties)) if (SCHEMA_KEYS.has(k)) properties[k] = v
+      properties.icon = `n${f.properties.rank}`
+      return {
+        id: `ftr_t9_${f.properties.kbComplexId}`,
+        project_id: f.project_id,
+        layer_id: layerId,
+        parent_id: null,
+        geometry: f.geometry,
+        title: f.title,
+        properties,
+        blocks: f.blocks.filter((b) => b.id === TRADES_BLOCK_ID),
+        derived_from: null,
+        created_at: f.created_at,
+        updated_at: now,
+      }
     })
 }

@@ -7,12 +7,14 @@
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import {
-  LAYER_NAME, buildProperties, dropStars, duplicateIds, matchTrades, mergeFeature, mergeSchema, sggCodesFor,
+  BAND_LAYERS, OUT_LAYER, bandOf, buildProperties, duplicateIds, matchTrades, mergeFeature, retireRows, sggCodesFor,
   summarizeTrades, tradesBlock,
 } from './build.ts'
 import type { Complex, KbRankItem, Region, Trade } from './build.ts'
 import { KbHttpError, fetchComplex, fetchRanking, fetchRegions } from './kb.ts'
 import { fetchTrades, recentMonths } from './molit.ts'
+import { syncTop } from './top9.ts'
+import { ensureLayer, readLayerFeatures, readLayers, supabaseClient, upsertFeatures } from './sb.ts'
 import type { FeatureRow, LayerRow } from '../../src/db/mappers.ts'
 
 const args = process.argv.slice(2)
@@ -33,17 +35,9 @@ if (!projectId || !/^[0-9a-f-]{36}$/.test(projectId)) {
 }
 
 process.loadEnvFile(fileURLToPath(new URL('../../.env', import.meta.url)))
-const { MOLIT_KEY, VITE_SUPABASE_URL: SB, VITE_SUPABASE_ANON_KEY: ANON } = process.env
-if (!MOLIT_KEY || !SB || !ANON) throw new Error('.env 에 MOLIT_KEY / VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY 가 필요하다')
-
-const sbHeaders = { apikey: ANON, Authorization: `Bearer ${ANON}`, 'x-project-id': projectId, 'Content-Type': 'application/json' }
-async function sb(path: string, init: RequestInit = {}): Promise<unknown> {
-  const r = await fetch(`${SB}/rest/v1/${path}`, { ...init, headers: { ...sbHeaders, ...(init.headers ?? {}) } })
-  const text = await r.text()
-  if (!r.ok) throw new Error(`Supabase ${r.status} ${path.split('?')[0]}: ${text}`)
-  // return=minimal 이면 본문이 비어 온다.
-  return text ? JSON.parse(text) : null
-}
+const { MOLIT_KEY } = process.env
+if (!MOLIT_KEY) throw new Error('.env 에 MOLIT_KEY 가 필요하다')
+const sb = supabaseClient(projectId)
 
 /* ---------- 1. 수집 (쓰기 없음) ---------- */
 const report = { regions: 0, failedRegions: [] as string[], complexes: 0, noCoord: [] as string[], unmatched: [] as string[] }
@@ -99,49 +93,32 @@ const built = complexes.map((c) => {
 })
 
 /* ---------- 3. 쓰기 ---------- */
-const layers = (await sb(`layers?project_id=eq.${projectId}&select=*`)) as LayerRow[]
-const mine = layers.filter((l) => l.name === LAYER_NAME)
-if (mine.length > 1) throw new Error(`"${LAYER_NAME}" 레이어가 ${mine.length}개다. 하나만 남겨라.`)
-let layer = mine[0]
+// 구간 레이어 5개 + 순위 밖. 이름으로 찾고 없으면 만든다 (dry-run 이면 만들 id 만 정한다).
+const layers = await readLayers(sb, projectId)
+const newLayerId = () => `lyr_${randomUUID().slice(0, 12)}`
+const bands: LayerRow[] = []
+for (const def of BAND_LAYERS) bands.push(await ensureLayer(sb, projectId, layers, def, newLayerId(), dryRun))
+const out = await ensureLayer(sb, projectId, layers, OUT_LAYER, newLayerId(), dryRun)
 
 const existing: FeatureRow[] = []
-if (layer) {
-  for (let offset = 0; ; offset += 1000) {
-    const page = (await sb(`features?layer_id=eq.${layer.id}&select=*&order=id&limit=1000&offset=${offset}`)) as FeatureRow[]
-    existing.push(...page)
-    if (page.length < 1000) break
-  }
-}
+for (const l of [...bands, out]) existing.push(...(await readLayerFeatures(sb, l.id)))
 const byKbId = new Map(existing.filter((f) => f.properties.kbComplexId).map((f) => [String(f.properties.kbComplexId), f]))
 
 const now = new Date().toISOString()
-const layerId = layer?.id ?? `lyr_${randomUUID().slice(0, 12)}`
 const rows = built.map(({ c, props, block }) => mergeFeature({
-  existing: byKbId.get(c.item.kbComplexId), c, props, block, layerId, projectId, now, newId: `ftr_${randomUUID().slice(0, 12)}`,
+  existing: byKbId.get(c.item.kbComplexId), c, props, block, layerId: bands[bandOf(c.item.rank)].id, projectId, now,
+  newId: `ftr_${randomUUID().slice(0, 12)}`,
 }))
 const created = rows.filter((r) => !byKbId.has(String(r.properties.kbComplexId))).length
+const moved = rows.filter((r) => { const e = byKbId.get(String(r.properties.kbComplexId)); return e && e.layer_id !== r.layer_id }).length
 const seen = new Set(rows.map((r) => String(r.properties.kbComplexId)))
-const unstarred = dropStars(existing, seen, collected, now)
+const retired = retireRows(existing, seen, collected, out.id, now)
 
-console.log(JSON.stringify({ ...report, unmatchedCount: report.unmatched.length, created, updated: rows.length - created, unstarred: unstarred.length, dryRun }, null, 2))
+console.log(JSON.stringify({ ...report, unmatchedCount: report.unmatched.length, created, updated: rows.length - created, moved, retired: retired.length, dryRun }, null, 2))
 if (dryRun) process.exit(0)
 
-if (!layer) {
-  const order = layers.reduce((m, l) => Math.max(m, l.order), -1) + 1
-  layer = {
-    id: layerId, project_id: projectId, name: LAYER_NAME, kind: 'vector', visible: true, order,
-    style: { color: '#b45309', opacity: 0.25, strokeWidth: 2, pointRadius: 6 }, schema: mergeSchema([]), locked: false,
-  }
-  await sb('layers', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify(layer) })
-} else {
-  await sb(`layers?id=eq.${layer.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ schema: mergeSchema(layer.schema) }) })
-}
-const writeRows = [...rows, ...unstarred]
-for (let i = 0; i < writeRows.length; i += 500) {
-  await sb('features', {
-    method: 'POST',
-    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify(writeRows.slice(i, i + 500)),
-  })
-}
-console.error(`기록 완료: ${writeRows.length}행 (신규 ${created}, ★ 해제 ${unstarred.length})`)
+await upsertFeatures(sb, [...rows, ...retired])
+console.error(`기록 완료: ${rows.length + retired.length}행 (신규 ${created}, 구간 이동 ${moved}, 순위 밖 ${retired.length})`)
+
+// 구간 레이어가 다 써진 뒤에 사본을 맞춘다 (계획 2026-09-29 T6).
+await syncTop(sb, projectId, false)

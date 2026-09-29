@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   SCHEMA, TRADES_BLOCK_ID, STAR_RANK, leafRegions, jibunOf, dongOf, matchTrades, summarizeTrades, formatPrice,
   recentTradeLine, tradesBlock, buildProperties, mergeSchema, mergeFeature, duplicateIds, sggCodesFor, rankIcon,
-  regionPrefix, dropStars,
+  regionPrefix, retireRows, topRows, bandOf, BAND_LAYERS,
 } from '../scripts/lead50/build.ts'
 import type { Complex, Trade } from '../scripts/lead50/build.ts'
 import type { FeatureRow } from '../src/db/mappers.ts'
@@ -205,26 +205,65 @@ test('regionPrefix: 시도를 떼고 공백으로 끝난다', () => {
   assert.equal(regionPrefix({ code: '4111300000', name: '경기 수원시 권선구' }), '수원시 권선구 ')
 })
 
-test('dropStars: 수집한 지역에서 순위에 없는 ★ 만 뗀다', () => {
-  const row = (id: string, region: string, icon?: string): FeatureRow => ({
-    id: 'f' + id, project_id: 'P', layer_id: 'L', parent_id: null,
+test('retireRows: 수집한 지역에서 순위에 없는 단지를 순위 밖 레이어로 옮기고 ★ 만 뗀다', () => {
+  const row = (id: string, region: string, icon?: string, layer = 'L'): FeatureRow => ({
+    id: 'f' + id, project_id: 'P', layer_id: layer, parent_id: null,
     geometry: { type: 'Point', coordinates: [0, 0] }, title: id,
     properties: { kbComplexId: id, region, ...(icon ? { icon } : {}), memo: 'm' },
     blocks: [], derived_from: null, created_at: 'C', updated_at: 'U',
   })
+  const drawn = { ...row('x', '금천구 독산동'), properties: { region: '금천구 독산동' } } // 사용자가 그린 도형 → 그대로
   const existing = [
-    row('1', '금천구 독산동', 'star'),     // 수집 지역, 순위 밖, ★ → 뗀다
+    row('1', '금천구 독산동', 'star'),     // 수집 지역, 순위 밖, ★ → 옮기고 뗀다
     row('2', '금천구 시흥동', 'star'),     // 수집 지역, 순위 안 → 그대로
     row('3', '구로구 신도림동', 'star'),   // 수집 안 한 지역 → 그대로
-    row('4', '금천구 가산동', 'home'),     // 사용자 아이콘 → 그대로
-    row('5', '화성시 동탄구 청계동', 'star'), // 화성시 수집, 순위 밖 → 뗀다
+    row('4', '금천구 가산동', 'home'),     // 사용자 아이콘 → 옮기되 아이콘 유지
+    row('5', '화성시 동탄구 청계동', 'star'), // 화성시 수집, 순위 밖 → 옮기고 뗀다
+    row('6', '금천구 독산동', undefined, 'OUT'), // 이미 순위 밖 → 그대로
+    drawn,
   ]
-  const out = dropStars(existing, new Set(['2']), [
+  const out = retireRows(existing, new Set(['2']), [
     { code: '1154500000', name: '서울 금천구' }, { code: '4159000000', name: '경기 화성시' },
-  ], 'NOW')
-  assert.deepEqual(out.map((f) => f.id), ['f1', 'f5'])
+  ], 'OUT', 'NOW')
+  assert.deepEqual(out.map((f) => f.id), ['f1', 'f4', 'f5'])
+  assert.ok(out.every((f) => f.layer_id === 'OUT'))
   assert.equal('icon' in out[0].properties, false)
+  assert.equal(out[1].properties.icon, 'home')
   assert.equal(out[0].properties.memo, 'm')
   assert.equal(out[0].updated_at, 'NOW')
   assert.equal(out[0].created_at, 'C')
+})
+
+test('bandOf: 10 위 단위 구간, 50 을 넘으면 실패', () => {
+  assert.equal(bandOf(1), 0)
+  assert.equal(bandOf(10), 0)
+  assert.equal(bandOf(11), 1)
+  assert.equal(bandOf(50), 4)
+  assert.equal(BAND_LAYERS.length, 5)
+  assert.throws(() => bandOf(51))
+  assert.throws(() => bandOf(0))
+})
+
+test('topRows: 최신 기준월의 1~9 위만, 우리 속성·거래 블록만 복사하고 순위 핀을 단다', () => {
+  const row = (id: string, rank: number, baseMonth: string, extra: Partial<FeatureRow> = {}): FeatureRow => ({
+    id: 'f' + id, project_id: 'P', layer_id: 'L', parent_id: null,
+    geometry: { type: 'Point', coordinates: [127, 37] }, title: 'T' + id,
+    properties: { kbComplexId: id, rank, baseMonth, icon: 'star', memo: 'm' },
+    blocks: [{ id: TRADES_BLOCK_ID, type: 'text', text: '거래' }, { id: 'b_user', type: 'text', text: '메모' }],
+    derived_from: null, created_at: 'C', updated_at: 'U', ...extra,
+  })
+  const out = topRows([
+    row('1', 1, '202609'),
+    row('9', 9, '202609'),
+    row('10', 10, '202609'),               // 10 위 → 뺀다
+    row('old', 2, '202608'),               // 옛 기준월 (순위에서 빠진 단지) → 뺀다
+    row('ring', 3, '202609', { parent_id: 'f1', derived_from: { op: 'ring', sourceIds: ['f1'], params: {} } }), // 링 → 뺀다
+  ], 'LT', 'NOW')
+  assert.deepEqual(out.map((f) => f.id), ['ftr_t9_1', 'ftr_t9_9'])
+  assert.deepEqual(out[0].properties, { kbComplexId: '1', rank: 1, baseMonth: '202609', icon: 'n1' })
+  assert.equal(out[1].properties.icon, 'n9')
+  assert.deepEqual(out[0].blocks.map((b) => b.id), [TRADES_BLOCK_ID])
+  assert.equal(out[0].layer_id, 'LT')
+  assert.equal(out[0].title, 'T1')
+  assert.equal(out[0].updated_at, 'NOW')
 })
