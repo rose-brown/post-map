@@ -40,6 +40,8 @@ test('pointSizeRatios: 링·선은 대상이 아니다', () => {
 
 test('dotRadius · pinScale: 값이 없으면 기본 크기, 있으면 바닥이 있다', () => {
   assert.equal(dotRadius(undefined), 6)
+  assert.equal(dotRadius(undefined, 3), 3)   // 레이어 style.pointRadius
+  assert.equal(dotRadius(1, 3), 14)          // sizeField 비율이 있으면 레이어 반지름은 무시
   assert.equal(dotRadius(1), 14)
   assert.equal(dotRadius(0), 3)
   assert.equal(pinScale(undefined), 1)

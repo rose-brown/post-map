@@ -37,8 +37,12 @@ export function pointSizeRatios(features: Feature[], layers: Layer[]): Map<strin
   return out
 }
 
-/** 기본 점 반지름(px)과 비율 → 반지름. 가장 작은 값도 눈에 보이도록 바닥을 둔다. */
+/**
+ * 비율 → 반지름(px). 비율이 없으면(sizeField 없음) 레이어 style.pointRadius, 그것도 없으면 DOT_RADIUS.
+ * 비율이 있으면 레이어 반지름과 무관하게 3~14px — 가장 작은 값도 눈에 보이도록 바닥을 둔다.
+ */
 export const DOT_RADIUS = 6
-export const dotRadius = (t: number | undefined) => (t === undefined ? DOT_RADIUS : Math.round((3 + 11 * t) * 10) / 10)
+export const dotRadius = (t: number | undefined, base: number = DOT_RADIUS) =>
+  (t === undefined ? base : Math.round((3 + 11 * t) * 10) / 10)
 /** 핀 배율. 숫자가 읽히도록 0.7 아래로는 줄이지 않는다. */
 export const pinScale = (t: number | undefined) => (t === undefined ? 1 : Math.round((0.7 + 0.8 * t) * 100) / 100)

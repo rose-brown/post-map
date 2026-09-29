@@ -365,6 +365,7 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
     const drawable = features.filter((f) => !f.derivedFrom && !hidden.has(f.layerId))
     const storeIds = new Set(drawable.map((f) => f.id))
     const colorOf = new Map(layers.map((l) => [l.id, l.style.color]))
+    const radiusOf = new Map(layers.map((l) => [l.id, l.style.pointRadius]))
 
     const missing = drawable.filter((f) => !draw.hasFeature(f.id))
     if (missing.length) {
@@ -373,7 +374,7 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
           type: 'Feature' as const,
           id: f.id,
           geometry: f.geometry,
-          properties: { mode: modeForGeometry(f.geometry.type), ...tdStyleProps(f, colorOf, sizeRatios) },
+          properties: { mode: modeForGeometry(f.geometry.type), ...tdStyleProps(f, colorOf, radiusOf, sizeRatios) },
         })) as GeoJSONStoreFeatures[],
       )
       // addFeatures 는 거부된 피처를 예외 없이 되돌려준다. 조용히 사라지면 원인을 찾기 어렵다.
@@ -540,9 +541,10 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
     const draw = drawRef.current
     if (!mapReady || !draw) return
     const colorOf = new Map(layers.map((l) => [l.id, l.style.color]))
+    const radiusOf = new Map(layers.map((l) => [l.id, l.style.pointRadius]))
     features.forEach((f) => {
       if (f.derivedFrom || !draw.hasFeature(f.id)) return
-      const want = tdStyleProps(f, colorOf, sizeRatios)
+      const want = tdStyleProps(f, colorOf, radiusOf, sizeRatios)
       const have = draw.getSnapshotFeature(f.id)?.properties
       if (have && have.layerId === want.layerId && have.icon === want.icon && have.color === want.color && have.size === want.size) return
       draw.updateFeatureProperties(f.id, want)
@@ -594,12 +596,12 @@ function modeForGeometry(type: string): string {
 }
 
 /** Terra Draw 쪽에 들고 있어야 하는 스타일 입력. 스타일 콜백(iconed·layerColor·pointWidth)이 이것을 읽는다. */
-function tdStyleProps(f: Feature, colorOf: Map<string, string>, sizeRatios: Map<string, number>) {
+function tdStyleProps(f: Feature, colorOf: Map<string, string>, radiusOf: Map<string, number>, sizeRatios: Map<string, number>) {
   const icon = f.properties.icon
   return {
     layerId: f.layerId,
     icon: typeof icon === 'string' ? icon : null,
     color: colorOf.get(f.layerId) ?? null,
-    size: f.geometry.type === 'Point' ? dotRadius(sizeRatios.get(f.id)) : null,
+    size: f.geometry.type === 'Point' ? dotRadius(sizeRatios.get(f.id), radiusOf.get(f.layerId)) : null,
   }
 }
