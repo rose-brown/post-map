@@ -8,3 +8,5 @@ node_modules/.tmp
 .playwright-mcp
 *.local
 scripts/lead50/.cache/
+# KTDB GTFS 원본 — 1.4GB, 재배포 조건 미확인 (docs/superpowers/specs/2026-09-29-transit-layers-design.md D2)
+대중교통GTFS*
