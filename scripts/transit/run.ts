@@ -85,7 +85,7 @@ let deleted = 0
 
 for (const line of LINES) {
   const stationIds = [...(byLine.get(line.gtfs) ?? [])]
-  const layer = await ensureLayer(sb, projectId, layers, { name: line.layer, color: line.color, visible: true }, `lyr_line_${line.code}_${tag}`, dryRun, lineSchema)
+  const layer = await ensureLayer(sb, projectId, layers, { name: line.layer, color: line.color, visible: false }, `lyr_line_${line.code}_${tag}`, dryRun, lineSchema)
   // 역은 앱 기본 점의 절반. ensureLayer 는 기존 스타일을 덮지 않으므로 여기서 맞춘다 (반지름을 바꾸는 UI 는 없다).
   if (layer.style.pointRadius !== STATION_POINT_RADIUS) {
     layer.style = { ...layer.style, pointRadius: STATION_POINT_RADIUS }
