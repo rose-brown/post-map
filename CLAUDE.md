@@ -39,6 +39,7 @@ node scripts/transit/run.ts <projectId> <GTFS_DataSet 경로> [--dry-run]   # �
 
 스크립트 순서: `lead50/run.ts` 는 끝에서 `top9 → price → presets` 를 알아서 부른다. `price.ts` 만 따로 돌렸으면 `top9.ts`(사본에 새 속성 전달) → `presets/run.ts` 순으로 잇고,
 `transit/run.ts` 뒤에도 `presets/run.ts` 를 다시 돌린다. 모두 스크립트 소유 키만 쓴다(lead50 스펙 D7). 쓰기 전에 항상 `--dry-run`.
+**lead50 `SCHEMA` 에 필드를 더하면 `transit/run.ts` 도 다시 돌려야** 교통 사본 레이어 7개(역 500m·선릉/여의도/시청)에 그 필드가 붙는다 — 사본은 만들 때의 스키마·속성을 복사한다 (2026-09-30 진입가 금액 버튼이 선릉 1시간 이내에만 없었다).
 
 배포: **`main` 에 push 하면** `.github/workflows/deploy.yml` 이 빌드해 GitHub Pages(`/post-map/`)에 올린다.
 빌드 env 는 Actions 시크릿 `VITE_VWORLD_KEY`·`VITE_SUPABASE_URL`·`VITE_SUPABASE_ANON_KEY`.
