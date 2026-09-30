@@ -15,6 +15,7 @@ import { KbHttpError, fetchComplex, fetchRanking, fetchRegions } from './kb.ts'
 import { fetchTrades, recentMonths } from './molit.ts'
 import { syncTop } from './top9.ts'
 import { syncPrice } from './price.ts'
+import { syncPresets } from '../presets/run.ts'
 import { ensureLayer, readLayerFeatures, readLayers, supabaseClient, upsertFeatures } from './sb.ts'
 import type { FeatureRow, LayerRow } from '../../src/db/mappers.ts'
 
@@ -124,3 +125,5 @@ console.error(`기록 완료: ${rows.length + retired.length}행 (신규 ${creat
 // 구간 레이어가 다 써진 뒤에 사본을 맞춘다 (계획 2026-09-29 T6).
 await syncTop(sb, projectId, false)
 await syncPrice(sb, projectId, false)
+// 새로 만든 레이어에도 필터 버튼 값이 들어가게 (스펙 filter-buttons E6).
+await syncPresets(sb, projectId, false)

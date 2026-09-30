@@ -47,10 +47,12 @@ const STAR_ICON = 'star'
 export const SCHEMA: PropertySchemaField[] = [
   { key: 'recentTrade', label: '최근 매매', type: 'text' },
   { key: 'entryTrade', label: '진입가', type: 'text' },
+  { key: 'entryPrice', label: '진입가 금액', type: 'number', unit: '억' },
   { key: 'rank', label: '순위', type: 'number' },
   { key: 'households', label: '총세대수', type: 'number', unit: '세대' },
   { key: 'generalHouseholds', label: '일반세대수', type: 'number', unit: '세대' },
   { key: 'completion', label: '준공', type: 'text' },
+  { key: 'ageYears', label: '입주년차', type: 'number', unit: '년차' },
   { key: 'pricePerPyeong', label: '평당시세', type: 'number', unit: '만원' },
   { key: 'marketCap', label: '시세총액', type: 'text' },
   { key: 'exclusiveArea', label: '전용면적', type: 'text' },
@@ -196,6 +198,17 @@ export function entryTradeLine(groups: AreaGroup[]): string | undefined {
   return g && tradeLine(g)
 }
 
+/** 진입가를 억 단위 숫자로 — 필터 버튼용 (스펙 filter-buttons E7). 소수 둘째 자리라 6.5억 경계가 틀어지지 않는다. */
+export function entryPriceOf(g: AreaGroup | undefined): number | undefined {
+  return g && Math.round(g.latest.price / 100) / 100
+}
+
+/** KB 준공 문자열 "03년 08월 (24년차)" 의 년차 (E8). 형식이 아니면 undefined. */
+export function ageYearsOf(completion: unknown): number | undefined {
+  const m = typeof completion === 'string' ? /\((\d+)년차\)/.exec(completion) : null
+  return m ? Number(m[1]) : undefined
+}
+
 /** formatPrice 의 역. "17억 1,000" · "17억" · "9,500만" → 만원. 형식이 아니면 NaN. */
 export function parsePrice(s: string): number {
   const m = /^(?:(\d+)억)?\s*(?:([\d,]+)만?)?$/.exec(s.trim())
@@ -233,10 +246,12 @@ export function buildProperties(c: Complex, groups: AreaGroup[]): Properties {
   const p: Record<string, string | number | undefined> = {
     recentTrade: recentTradeLine(groups),
     entryTrade: entryTradeLine(groups),
+    entryPrice: entryPriceOf(entryGroup(groups)),
     rank: item.rank,
     households: detail.households,
     generalHouseholds: item.generalHouseholds,
     completion: item.completion,
+    ageYears: ageYearsOf(item.completion),
     pricePerPyeong: item.pricePerPyeong,
     marketCap: item.marketCap,
     exclusiveArea: detail.minArea && detail.maxArea ? `${detail.minArea}~${detail.maxArea}㎡` : undefined,
@@ -378,8 +393,16 @@ export const PRICE_LAYERS: LayerDef[] = [
 
 export const priceBandOf = (manwon: number): number => PRICE_CUTS.filter((c) => manwon >= c).length
 
+/** priceRows 가 쓰는 원본 키 — 이것만 비교해 바뀌었는지 본다. */
+const OWN_PRICE_KEYS = ['entryTrade', 'entryPrice', 'ageYears'] as const
+
+function setOrDelete(p: Properties, key: string, v: number | undefined): void {
+  if (v === undefined) delete p[key]
+  else p[key] = v
+}
+
 /**
- * 원본 단지 → (진입가를 채운 원본, 가격 구간 사본). 거래 블록이 없는 단지는 둘 다 없다.
+ * 원본 단지 → (진입가·진입가 금액·입주년차를 채운 원본, 가격 구간 사본). 거래 블록이 없는 단지는 둘 다 없다.
  * 사본 id 는 단지당 하나라 구간이 바뀌면 같은 도형이 레이어를 옮긴다. 속성은 전부, 블록은 거래 블록만 복사한다
  * (이미지 블록을 두 도형이 공유하지 않게 — TOP9 와 같은 이유).
  */
@@ -390,9 +413,19 @@ export function priceRows(source: FeatureRow[], layerIds: string[], now: string)
     if (f.derived_from || f.parent_id || !f.properties.kbComplexId) continue
     const block = f.blocks.find((b) => b.id === TRADES_BLOCK_ID)
     const g = entryGroup(parseTradesBlock(block?.text ?? ''))
-    if (!g) continue
-    const properties: Properties = { ...f.properties, entryTrade: tradeLine(g) }
-    const original = properties.entryTrade === f.properties.entryTrade ? f : { ...f, properties, updated_at: now }
+    const properties: Properties = { ...f.properties }
+    setOrDelete(properties, 'ageYears', ageYearsOf(f.properties.completion))
+    if (g) {
+      properties.entryTrade = tradeLine(g)
+      setOrDelete(properties, 'entryPrice', entryPriceOf(g))
+    }
+    const same = OWN_PRICE_KEYS.every((k) => properties[k] === f.properties[k])
+    const original = same ? f : { ...f, properties, updated_at: now }
+    // 거래 없는 단지는 입주년차가 바뀐 경우에만 원본을 쓰고, 사본은 없다.
+    if (!g) {
+      if (!same) originals.push(original)
+      continue
+    }
     originals.push(original)
     copies.push({
       ...original,

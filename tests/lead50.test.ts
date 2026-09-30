@@ -5,6 +5,7 @@ import {
   recentTradeLine, tradesBlock, buildProperties, mergeSchema, mergeFeature, duplicateIds, sggCodesFor, rankIcon,
   regionPrefix, retireRows, topRows, bandOf, BAND_LAYERS,
   entryTradeLine, parsePrice, parseTradesBlock, priceBandOf, priceRows, PRICE_LAYERS,
+  ageYearsOf, entryPriceOf, entryGroup,
 } from '../scripts/lead50/build.ts'
 import type { Complex, Trade } from '../scripts/lead50/build.ts'
 import type { FeatureRow } from '../src/db/mappers.ts'
@@ -322,3 +323,59 @@ test('priceRows: 원본에 진입가, 사본은 단지당 하나·구간 레이�
   assert.equal(again.originals[0].updated_at, 'now')
 })
 
+test('entryPriceOf: 만원 → 억, 소수 둘째 자리', () => {
+  const g = (price: number) => entryGroup(summarizeTrades([t({ price })], '2025-10-01'))
+  assert.equal(entryPriceOf(g(68500)), 6.85)
+  assert.equal(entryPriceOf(g(9500)), 0.95)
+  assert.equal(entryPriceOf(g(120000)), 12)
+  assert.equal(entryPriceOf(undefined), undefined)
+})
+
+test('ageYearsOf: KB 준공 문자열의 (N년차)', () => {
+  assert.equal(ageYearsOf('03년 08월 (24년차)'), 24)
+  assert.equal(ageYearsOf('26년 01월 (1년차)'), 1)
+  assert.equal(ageYearsOf('03년 08월'), undefined)
+  assert.equal(ageYearsOf(undefined), undefined)
+  assert.equal(ageYearsOf(24), undefined)
+})
+
+test('SCHEMA: entryPrice 는 entryTrade 뒤, ageYears 는 completion 뒤, 둘 다 number', () => {
+  const keys = SCHEMA.map((f) => f.key)
+  assert.equal(keys[keys.indexOf('entryTrade') + 1], 'entryPrice')
+  assert.equal(keys[keys.indexOf('completion') + 1], 'ageYears')
+  assert.equal(SCHEMA.find((f) => f.key === 'entryPrice')?.type, 'number')
+  assert.equal(SCHEMA.find((f) => f.key === 'ageYears')?.unit, '년차')
+})
+
+test('buildProperties: entryPrice·ageYears 를 채우고 없으면 키가 없다', () => {
+  const p = buildProperties(complex(), summarizeTrades([t({ area: 59.9, price: 72000 }), t({ price: 95000 })], '2025-10-01'))
+  assert.equal(p.entryPrice, 7.2)
+  assert.equal(p.ageYears, 6)                                   // complex() 의 '21년 01월 (6년차)'
+  const q = buildProperties(complex({ completion: undefined }), [])
+  assert.equal('entryPrice' in q, false)
+  assert.equal('ageYears' in q, false)
+})
+
+test('priceRows: entryPrice·ageYears 도 쓰고, 거래 없는 단지는 입주년차만 바뀌면 원본만 (사본 없음)', () => {
+  const block = tradesBlock(summarizeTrades([t({ area: 59.9, price: 72000 })], '2025-10-01'))!
+  const base: FeatureRow = {
+    id: 'ftr_a', project_id: 'p', layer_id: 'lyr_band', parent_id: null, geometry: { type: 'Point', coordinates: [127, 37] },
+    title: '단지', properties: { kbComplexId: '1', completion: '03년 08월 (24년차)' }, blocks: [block],
+    derived_from: null, created_at: 'c', updated_at: 'u',
+  }
+  const noTrade: FeatureRow = { ...base, id: 'ftr_b', blocks: [] }
+  const stale: FeatureRow = { ...base, id: 'ftr_c', blocks: [], properties: { kbComplexId: '3', ageYears: 9 } }   // 준공 문자열이 없어졌다
+  const { originals, copies } = priceRows([base, noTrade, stale], ['L0', 'L1', 'L2', 'L3', 'L4', 'L5'], 'now')
+  const byId = new Map(originals.map((f) => [f.id, f]))
+  assert.equal(byId.get('ftr_a')?.properties.entryPrice, 7.2)
+  assert.equal(byId.get('ftr_a')?.properties.ageYears, 24)
+  assert.equal(byId.get('ftr_b')?.properties.ageYears, 24)
+  assert.equal('entryPrice' in (byId.get('ftr_b')?.properties ?? {}), false)
+  assert.equal('ageYears' in (byId.get('ftr_c')?.properties ?? { ageYears: 1 }), false)
+  assert.deepEqual(copies.map((c) => c.id), ['ftr_a__price'])
+  assert.equal(copies[0].properties.entryPrice, 7.2)
+  // 다시 돌리면 바뀐 것 없음 → updated_at 유지, 거래 없는 단지는 원본 목록에서도 빠진다
+  const again = priceRows(originals, ['L0', 'L1', 'L2', 'L3', 'L4', 'L5'], 'later')
+  assert.deepEqual(again.originals.filter((f) => f.updated_at === 'later').map((f) => f.id), [])
+  assert.deepEqual(again.originals.map((f) => f.id), ['ftr_a'])
+})
