@@ -32,6 +32,7 @@ node --test tests/mappers.test.ts   # 단일 파일. Node 22 가 .ts 를 타입 
 node scripts/lead50/run.ts <projectId> [--only 코드,…] [--dry-run]   # 월간선도50 갱신 (월 1회). 스펙 docs/superpowers/specs/2026-09-27-lead50-layer-design.md
 node scripts/lead50/top9.ts <projectId> [--dry-run]   # TOP9 사본만 다시 맞춤 (Supabase 키만 필요). run.ts 가 끝에서 자동으로 부른다
 node scripts/lead50/price.ts <projectId> [--dry-run]  # 진입가 구간 레이어 6개 (3/5/6.5/8/12억). 거래 블록에서 계산, run.ts 가 끝에서 자동으로 부른다
+node scripts/presets/run.ts <projectId> [--dry-run]   # 필터 버튼 값을 모든 레이어 스키마에 (lead50 run.ts 가 끝에서 부른다, transit 뒤에는 수동). 실행 뒤 앱 탭은 새로고침
 node scripts/transit/run.ts <projectId> <GTFS_DataSet 경로> [--dry-run]   # 지하철 호선 24(역만) + 역세권·선릉/여의도/시청 30분·1시간 레이어. lead50 갱신 뒤 다시 돌린다. 스펙 docs/superpowers/specs/2026-09-29-transit-layers-design.md
 ```
 
@@ -264,4 +265,5 @@ Design Compiler 목업(`<x-dc>` + `text/x-dc` 스크립트)이다. **실행 가�
   **필터(F-71 일부)는 있다** — `src/filter.ts` 판정을 목록·지도 동기화·`pointIcons` 세 곳이 같이 쓴다. 조건은 스토어에만(새로고침하면 사라짐),
   지도에서는 선택 도형이 예외, 동심원은 거르지 않는다. 스펙 `docs/superpowers/specs/2026-09-30-list-filter-design.md`.
   목록은 수천 행이라 `Row` 는 `memo`, 필터는 `useDeferredValue` 로 늦춰 쓴다 — 빼면 한 글자에 1초 넘게 걸린다.
+  버튼 묶음은 스키마 필드 `presets`(스크립트 소유, `scripts/presets/presets.ts`)로 그린다 — 앱은 편집하지 않는다. 스펙 `2026-09-30-filter-buttons-design.md`.
   **테이블 뷰**(F-70·72~75)는 여전히 Phase 2 다.
