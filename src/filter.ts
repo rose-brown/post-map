@@ -6,9 +6,9 @@
  * 해석이 안 되는 조건(빈 값·숫자 아님·사이의 반쪽)은 판정에서 뺀다 — 입력 도중 0건으로 깜빡이지 않게 (D4).
  * 불변 규칙 6 — 도메인 용어를 넣지 않는다. 필드 라벨은 레이어 스키마에서 온다.
  */
-import type { Feature, Layer, PropertySchemaField, PropertyType } from './types'
+import type { Feature, FilterOp, FilterPreset, Layer, PropertySchemaField, PropertyType } from './types'
 
-export type FilterOp = 'gte' | 'lte' | 'between' | 'contains'
+export type { FilterOp }
 
 export interface FilterCond {
   id: string
@@ -110,4 +110,34 @@ function matchOne(feature: Feature, c: FilterCond): boolean {
 /** 모든 조건 AND. conds 는 activeConds 를 거친 것이어야 한다. 키가 없으면 false (D3). */
 export function matches(feature: Feature, conds: FilterCond[]): boolean {
   return conds.every((c) => matchOne(feature, c))
+}
+
+/** 버튼 묶음을 그릴 필드: 보이는 레이어의 presets 있는 number 필드 (filterFields 순서 = 스키마 순서, E10). */
+export function presetFields(layers: Layer[]): PropertySchemaField[] {
+  return filterFields(layers, { visibleOnly: true }).filter((f) => f.type === 'number' && !!f.presets?.length)
+}
+
+const sameValue = (a: FilterCond['value'], b: FilterCond['value']): boolean =>
+  Array.isArray(a) && Array.isArray(b) ? a[0] === b[0] && a[1] === b[1] : a === b
+
+/** 버튼 켜짐 = 같은 key·op·value 조건이 있다 (E3). 직접 입력으로 같은 값을 넣어도 켜진다. */
+export function presetOn(conds: FilterCond[], key: string, p: FilterPreset): boolean {
+  return conds.some((c) => c.key === key && c.op === p.op && sameValue(c.value, p.value))
+}
+
+/** E4. 켜져 있으면 그 key 조건을 모두 빼고, 아니면 그 key 조건을 모두 지운 뒤 버튼 조건 하나를 넣는다. */
+export function togglePreset(conds: FilterCond[], key: string, p: FilterPreset, id: string): FilterCond[] {
+  const rest = conds.filter((c) => c.key !== key)
+  if (presetOn(conds, key, p)) return rest
+  const value: FilterCond['value'] = Array.isArray(p.value) ? [p.value[0], p.value[1]] : p.value
+  return [...rest, { id, key, op: p.op, value }]
+}
+
+/** E11. 버튼으로 보이지 않는 조건(프리셋 없는 필드·버튼과 다른 값·적용 안 됨·입력 중)이 있나 — 있으면 직접 입력을 펼쳐 둔다. */
+export function hasManualConds(conds: FilterCond[], visibleFields: PropertySchemaField[]): boolean {
+  return conds.some((c) => {
+    if (condProblem(c, visibleFields)) return true
+    const presets = visibleFields.find((f) => f.key === c.key)?.presets ?? []
+    return !presets.some((p) => p.op === c.op && sameValue(c.value, p.value))
+  })
 }

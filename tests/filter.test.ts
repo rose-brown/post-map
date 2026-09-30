@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { activeConds, activeFilter, condProblem, fieldFor, filterFields, matches, opsFor, type FilterCond } from '../src/filter.ts'
-import type { Feature, Layer, PropertySchemaField } from '../src/types.ts'
+import { activeConds, activeFilter, condProblem, fieldFor, filterFields, hasManualConds, matches, opsFor, presetFields, presetOn, togglePreset, type FilterCond } from '../src/filter.ts'
+import type { Feature, FilterPreset, Layer, PropertySchemaField } from '../src/types.ts'
 
 const layer = (id: string, schema: PropertySchemaField[], visible = true): Layer => ({
   id, projectId: 'p', name: id, kind: 'vector', visible, order: 0, schema, locked: false,
@@ -112,4 +112,56 @@ test('condProblem: 필드가 안 보이면 out-of-scope, 연산자가 타입과 
   assert.equal(condProblem(c('h', 'gte', '1'), visible), 'op-mismatch')
   assert.equal(condProblem(c('s', 'gte', ''), visible), null) // 빈 값은 입력 중 — 표시할 문제 아님
   assert.equal(condProblem(c('s', 'lte', '1'), visible), null)
+})
+
+const pre = (label: string, op: FilterCond['op'], value: FilterCond['value']): FilterPreset => ({ label, op, value })
+const withP = (f: PropertySchemaField, presets: FilterPreset[]): PropertySchemaField => ({ ...f, presets })
+
+test('presetFields: 보이는 레이어의 presets 있는 number 필드만, 순서 유지', () => {
+  const layers = [
+    layer('A', [txt('r'), withP(num('h'), [pre('1000~', 'gte', '1000')]), num('n'), withP(txt('t'), [pre('x', 'contains', 'x')])]),
+    layer('B', [withP(num('s'), [pre('500m', 'lte', '500')])], false),
+    layer('C', [withP(num('d'), [pre('30분', 'lte', '30')])]),
+  ]
+  assert.deepEqual(presetFields(layers).map((f) => f.key), ['h', 'd'])
+})
+
+test('presetOn: 같은 key·op·value 면 켜짐, between 은 배열 내용 비교', () => {
+  const p = pre('1000~', 'gte', '1000')
+  assert.equal(presetOn([c('h', 'gte', '1000')], 'h', p), true)
+  assert.equal(presetOn([c('h', 'gte', '1,000')], 'h', p), false)
+  assert.equal(presetOn([c('h', 'lte', '1000')], 'h', p), false)
+  assert.equal(presetOn([c('x', 'gte', '1000')], 'h', p), false)
+  const b = pre('3~5억', 'between', ['3', '5'])
+  assert.equal(presetOn([c('e', 'between', ['3', '5'])], 'e', b), true)
+  assert.equal(presetOn([c('e', 'between', ['3', '6'])], 'e', b), false)
+})
+
+test('togglePreset: 같은 key 조건을 모두 지우고 버튼 조건 하나, 다른 key 는 그대로', () => {
+  const conds = [c('h', 'gte', '500'), c('h', 'lte', '3000'), c('s', 'lte', '800'), c('x', 'gte', '')]
+  const next = togglePreset(conds, 'h', pre('1000~', 'gte', '1000'), 'new')
+  assert.deepEqual(next.map((x) => [x.key, x.op, x.value]), [['s', 'lte', '800'], ['x', 'gte', ''], ['h', 'gte', '1000']])
+  assert.equal(next[2].id, 'new')
+})
+
+test('togglePreset: 켜진 버튼을 다시 누르면 그 key 조건이 모두 빠진다', () => {
+  const conds = [c('h', 'gte', '1000'), c('s', 'lte', '800')]
+  assert.deepEqual(togglePreset(conds, 'h', pre('1000~', 'gte', '1000'), 'new').map((x) => x.key), ['s'])
+})
+
+test('togglePreset: between 프리셋 값은 복사해 넣는다 (공유 배열 아님)', () => {
+  const p = pre('3~5억', 'between', ['3', '5'])
+  const next = togglePreset([], 'e', p, 'id')
+  assert.deepEqual(next[0].value, ['3', '5'])
+  assert.notEqual(next[0].value, p.value)
+})
+
+test('hasManualConds: 버튼으로 표현 안 되는 조건이 있으면 true', () => {
+  const fields = [withP(num('h'), [pre('1000~', 'gte', '1000')]), num('n')]
+  assert.equal(hasManualConds([], fields), false)
+  assert.equal(hasManualConds([c('h', 'gte', '1000')], fields), false)
+  assert.equal(hasManualConds([c('h', 'gte', '1200')], fields), true)   // 값이 버튼과 다름
+  assert.equal(hasManualConds([c('n', 'gte', '1')], fields), true)      // presets 없는 필드
+  assert.equal(hasManualConds([c('gone', 'gte', '1')], fields), true)   // 적용 안 됨
+  assert.equal(hasManualConds([c('h', 'gte', '')], fields), true)       // 입력 중인 빈 조건
 })

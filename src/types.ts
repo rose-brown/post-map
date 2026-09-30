@@ -14,6 +14,16 @@ export type PropertyType =
   | 'url'
   | 'phone'
 
+/** 필터 연산자 (src/filter.ts). 스키마 필드의 버튼 값(presets)이 참조하므로 여기에 둔다. */
+export type FilterOp = 'gte' | 'lte' | 'between' | 'contains'
+
+/** 필터 버튼 하나 — 값은 입력칸 문자열과 같은 형식. 값 자체는 데이터(스크립트가 쓰는 스키마)에만 있다 (불변 규칙 6). */
+export interface FilterPreset {
+  label: string
+  op: FilterOp
+  value: string | [string, string]
+}
+
 /** `key` 는 레이어 내 유일. */
 export interface PropertySchemaField {
   key: string
@@ -22,6 +32,8 @@ export interface PropertySchemaField {
   unit?: string
   required?: boolean
   options?: string[]
+  /** 필터 버튼 값 (스펙 2026-09-30 filter-buttons E1). 스크립트 소유 — 앱은 읽기만 한다. */
+  presets?: FilterPreset[]
 }
 
 export type PropertyValue = string | number | boolean | string[]
