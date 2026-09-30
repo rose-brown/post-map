@@ -323,11 +323,13 @@ test('priceRows: 원본에 진입가, 사본은 단지당 하나·구간 레이�
   assert.equal(again.originals[0].updated_at, 'now')
 })
 
-test('entryPriceOf: 만원 → 억, 소수 둘째 자리', () => {
+test('entryPriceOf: 만원 → 억, 소수 둘째 자리 내림 (구간 레이어의 [하한, 상한) 과 같게)', () => {
   const g = (price: number) => entryGroup(summarizeTrades([t({ price })], '2025-10-01'))
   assert.equal(entryPriceOf(g(68500)), 6.85)
   assert.equal(entryPriceOf(g(9500)), 0.95)
   assert.equal(entryPriceOf(g(120000)), 12)
+  assert.equal(entryPriceOf(g(119950)), 11.99)                 // 반올림이면 12 가 돼 12억~ 에 걸렸다
+  assert.equal(entryPriceOf(g(64999)), 6.49)
   assert.equal(entryPriceOf(undefined), undefined)
 })
 

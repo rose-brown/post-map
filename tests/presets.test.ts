@@ -27,8 +27,10 @@ test('PRESETS: 스펙 8절 key 전부, 연산자는 모두 number 연산자, 값
       for (const v of Array.isArray(p.value) ? p.value : [p.value]) assert.ok(Number.isFinite(Number(v)), `${key} ${p.label}`)
     }
   }
-  assert.deepEqual(PRESETS.households.map((p) => p.label), ['300~', '500~', '1000~', '2000~', '3000~'])
-  assert.deepEqual(PRESETS.entryPrice.at(-1), { label: '12억~', op: 'gte', value: '12' })
+  assert.deepEqual(PRESETS.households.map((p) => p.label), ['~300', '300~500', '500~1000', '1000~2000', '2000~3000', '3000~'])
+  assert.deepEqual(PRESETS.entryPrice.map((p) => p.label), ['~3억', '3~5억', '5~6.5억', '6.5~8억', '8~12억', '12억~'])
+  assert.deepEqual(PRESETS.entryPrice[3], { label: '6.5~8억', op: 'between', value: ['6.5', '7.99'] })
+  assert.deepEqual(PRESETS.households[3], { label: '1000~2000', op: 'between', value: ['1000', '1999'] })
 })
 
 test('schemaChanged: jsonb 가 키 순서를 바꿔 돌려줘도 같은 내용이면 false', () => {

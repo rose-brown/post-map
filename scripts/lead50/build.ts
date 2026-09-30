@@ -198,9 +198,12 @@ export function entryTradeLine(groups: AreaGroup[]): string | undefined {
   return g && tradeLine(g)
 }
 
-/** 진입가를 억 단위 숫자로 — 필터 버튼용 (스펙 filter-buttons E7). 소수 둘째 자리라 6.5억 경계가 틀어지지 않는다. */
+/**
+ * 진입가를 억 단위 숫자로 — 필터 버튼용 (스펙 filter-buttons E7). 소수 둘째 자리 **내림**: 6억 4,999만 → 6.49.
+ * 반올림이면 11억 9,950만이 12 가 돼 진입가 구간 레이어([하한, 상한))와 다른 구간 버튼에 걸렸다.
+ */
 export function entryPriceOf(g: AreaGroup | undefined): number | undefined {
-  return g && Math.round(g.latest.price / 100) / 100
+  return g && Math.floor(g.latest.price / 100) / 100
 }
 
 /** KB 준공 문자열 "03년 08월 (24년차)" 의 년차 (E8). 형식이 아니면 undefined. */

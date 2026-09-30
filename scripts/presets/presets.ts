@@ -6,11 +6,14 @@ import type { FilterPreset, PropertySchemaField } from '../../src/types.ts'
 
 const le = (label: string, v: number): FilterPreset => ({ label, op: 'lte', value: String(v) })
 const ge = (label: string, v: number): FilterPreset => ({ label, op: 'gte', value: String(v) })
+/** 구간 [lo, hi) — between 은 양끝 포함이라 상한을 데이터 정밀도 한 칸 아래로 둔다 (진입가 억 둘째 자리, 세대 정수). */
+const range = (label: string, lo: number, hiIncl: number): FilterPreset => ({ label, op: 'between', value: [String(lo), String(hiIncl)] })
 const minutes = [le('20분', 20), le('30분', 30), le('45분', 45), le('1시간', 60)]
 
 export const PRESETS: Record<string, FilterPreset[]> = {
-  entryPrice: [le('3억 이하', 3), le('5억 이하', 5), le('6.5억 이하', 6.5), le('8억 이하', 8), le('12억 이하', 12), ge('12억~', 12)],
-  households: [ge('300~', 300), ge('500~', 500), ge('1000~', 1000), ge('2000~', 2000), ge('3000~', 3000)],
+  // 진입가 구간 레이어(lead50 D13)와 같은 경계. 사용자 요청 2026-09-30: 누적(이하) 대신 구간.
+  entryPrice: [le('~3억', 2.99), range('3~5억', 3, 4.99), range('5~6.5억', 5, 6.49), range('6.5~8억', 6.5, 7.99), range('8~12억', 8, 11.99), ge('12억~', 12)],
+  households: [le('~300', 299), range('300~500', 300, 499), range('500~1000', 500, 999), range('1000~2000', 1000, 1999), range('2000~3000', 2000, 2999), ge('3000~', 3000)],
   ageYears: [le('~5년', 5), le('~10년', 10), le('~15년', 15), le('~20년', 20), ge('20년~', 20), ge('30년~', 30)],
   // 분포 2026-09-30: 중앙 2,357 · 상위25% 4,037 · 상위10% 6,010 (만원)
   pricePerPyeong: [le('~1천', 1000), le('~2천', 2000), le('~3천', 3000), le('~4천', 4000), le('~6천', 6000), ge('6천~', 6000)],

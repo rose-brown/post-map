@@ -33,7 +33,7 @@ Phase 2 는 계획만 있고 손대지 않았다.
 설계 `docs/superpowers/specs/2026-09-30-list-filter-design.md`, 계획 `docs/superpowers/plans/2026-09-30-list-filter.md`, 기록 `docs/log/2026-09-30.md`.
 
 **필터 버튼 (2026-09-30)** — 아실식 항목별 버튼(진입가 금액·총세대수·입주년차·평당시세·역까지·선릉/여의도/시청). 값은 `scripts/presets/presets.ts`,
-스키마 `presets` 로 들어간다. 원본 단지에 `entryPrice`(억)·`ageYears`(년차) 숫자 속성 추가(`price.ts`). PC 우측 패널 접기.
+스키마 `presets` 로 들어간다. 진입가 금액·총세대수는 **구간** 버튼(진입가 구간 레이어와 같은 경계, 값은 억 둘째 자리 내림). 원본 단지에 `entryPrice`(억)·`ageYears`(년차) 숫자 속성 추가(`price.ts`). PC 우측 패널 접기.
 스크립트로 스키마를 바꾼 뒤에는 앱 탭을 새로고침한다. 설계 `docs/superpowers/specs/2026-09-30-filter-buttons-design.md`.
 **지도에서 점을 클릭해도 정보 페이지가 열리지 않는다** (배포본 main 에서도 같음, 2026-09-30 Playwright 로 관찰 — 손으로 눌러 확인 필요).
 
