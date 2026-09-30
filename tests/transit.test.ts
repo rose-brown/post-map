@@ -163,3 +163,14 @@ test('buildWaitGraph: 대기가 긴 직행보다 대기가 짧은 환승이 빠�
   const d = stationSecondsTo(buildWaitGraph(trips, [{ from: 'M', to: 'N', seconds: 120 }], waits), ['Y'])
   assert.equal(d.get('A'), 600 + 300 + 120 + 600 + 300)   // 1920 < 직행 4200
 })
+
+test('boardWaits: 창 안에 그 방향만 없고 반대 방향은 있으면 반대 방향 배차를 쓴다 (KTDB 7호선 남행 결함)', () => {
+  const trips = tripSequences([
+    ...[0, 1, 2, 3].flatMap((i) => [st(`U_Ord00${i}`, 'P', 1, H7 + i * 600), st(`U_Ord00${i}`, 'Q', 2, H7 + i * 600 + 120)]), // P→Q 창 안 4회
+    st('D_Ord001', 'Q', 1, 17 * 3600), st('D_Ord001', 'P', 2, 17 * 3600 + 120),                                          // Q→P 저녁에만
+  ])
+  const { waits, fallback, mirrored } = boardWaits(trips)
+  assert.equal(waits.get('Q>P'), 7200 / 4 / 2)
+  assert.deepEqual(mirrored, ['Q>P'])
+  assert.deepEqual(fallback, [])
+})

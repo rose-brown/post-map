@@ -119,11 +119,13 @@ const DAY_WINDOW: [number, number] = [5 * 3600, 24 * 3600]
 /**
  * 구간 a→b 로 출발하는 열차를 탈 때의 평균 대기 = 배차간격 ÷ 2 (W1·W3).
  * 방향별로 센다 — 양방향을 합치면 대기가 절반으로 준다. 급행(다음 정차가 다름)은 다른 키다.
+ * 창 안에 그 방향만 없고 반대 방향(b→a)은 있으면 반대 방향 배차를 쓴다 (W10) — KTDB 2025-03 은 7호선 남행(07-1D)이
+ * 16시 이후 75회뿐이라, 하루 폴백이면 출근 대기가 8분(실제 2~3분)으로 부풀었다. 둘 다 없으면 하루 폴백 (W4).
  */
 export function boardWaits(
   trips: Map<string, StopTime[]>,
   window: [number, number] = PEAK_WINDOW,
-): { waits: Map<string, number>; fallback: string[] } {
+): { waits: Map<string, number>; fallback: string[]; mirrored: string[] } {
   const inWindow = new Map<string, number>()
   const inDay = new Map<string, number>()
   const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1)
@@ -139,10 +141,18 @@ export function boardWaits(
   }
   const waits = new Map<string, number>()
   const fallback: string[] = []
+  const mirrored: string[] = []
   for (const k of new Set([...inWindow.keys(), ...inDay.keys()])) {
     const n = inWindow.get(k)
     if (n) {
       waits.set(k, (window[1] - window[0]) / n / 2)
+      continue
+    }
+    const [a, b] = k.split('>')
+    const back = inWindow.get(`${b}>${a}`)
+    if (back) {
+      waits.set(k, (window[1] - window[0]) / back / 2)
+      mirrored.push(k)
       continue
     }
     const d = inDay.get(k)
@@ -151,7 +161,7 @@ export function boardWaits(
       fallback.push(k)
     }
   }
-  return { waits, fallback: fallback.sort() }
+  return { waits, fallback: fallback.sort(), mirrored: mirrored.sort() }
 }
 
 /**

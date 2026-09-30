@@ -39,7 +39,7 @@ if (unknownLines.length) throw new Error(`LINES 에 없는 호선: ${unknownLine
 const badIds = gtfs.stops.filter((s) => /[>|]/.test(s.id)).map((s) => s.id)
 if (badIds.length) throw new Error(`stop id 에 '>' 또는 '|' 가 있다: ${badIds.slice(0, 5).join(', ')}`)
 // 대기시간 (스펙 2026-09-30-transit-wait): 07~09시 방향별 배차간격 ÷ 2, 탈 때마다.
-const { waits, fallback } = boardWaits(trips)
+const { waits, fallback, mirrored } = boardWaits(trips)
 const graph = buildWaitGraph(trips, gtfs.transfers, waits)
 const routingStart = Date.now()
 const toTargets = TARGETS.map((t) => stationSecondsTo(graph, targetStops(gtfs.stops, t.name)))
@@ -79,6 +79,7 @@ const report = {
     medianMin: Number((waitList[waitList.length >> 1] / 60).toFixed(1)),
     maxMin: Number((waitList[waitList.length - 1] / 60).toFixed(1)),
     fallback: fallback.length,
+    mirrored: mirrored.length,
   },
   routingMs,
   dryRun,
