@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { activeConds, activeFilter, filterFields, matches, opsFor, type FilterCond } from '../src/filter.ts'
+import { activeConds, activeFilter, condProblem, fieldFor, filterFields, matches, opsFor, type FilterCond } from '../src/filter.ts'
 import type { Feature, Layer, PropertySchemaField } from '../src/types.ts'
 
 const layer = (id: string, schema: PropertySchemaField[], visible = true): Layer => ({
@@ -96,4 +96,20 @@ test('matches: 여러 조건은 AND', () => {
   const f = feat({ h: 1500, s: 900 })
   assert.equal(matches(f, [c('h', 'gte', '1000'), c('s', 'lte', '800')]), false)
   assert.equal(matches(f, [c('h', 'gte', '1000'), c('s', 'lte', '900')]), true)
+})
+
+test('fieldFor: 보이는 필드 정의가 먼저, 없으면 전체 레이어 정의', () => {
+  const visible = [num('h', '보이는 h')]
+  const all = [txt('h', '숨은 h'), num('h', '보이는 h'), num('s', '숨은 s')]
+  assert.equal(fieldFor('h', visible, all)?.type, 'number')
+  assert.equal(fieldFor('s', visible, all)?.label, '숨은 s')
+  assert.equal(fieldFor('gone', visible, all), undefined)
+})
+
+test('condProblem: 필드가 안 보이면 out-of-scope, 연산자가 타입과 안 맞으면 op-mismatch, 아니면 null', () => {
+  const visible = [txt('h'), num('s')]
+  assert.equal(condProblem(c('x', 'gte', '1'), visible), 'out-of-scope')
+  assert.equal(condProblem(c('h', 'gte', '1'), visible), 'op-mismatch')
+  assert.equal(condProblem(c('s', 'gte', ''), visible), null) // 빈 값은 입력 중 — 표시할 문제 아님
+  assert.equal(condProblem(c('s', 'lte', '1'), visible), null)
 })

@@ -63,6 +63,28 @@ export function activeConds(conds: FilterCond[], fields: PropertySchemaField[]):
   })
 }
 
+/** 표시용 필드 정의: 보이는 레이어 정의가 먼저, 없으면 전체 레이어 정의 (D6). 판정과 같은 타입을 보여야 한다. */
+export function fieldFor(
+  key: string,
+  visibleFields: PropertySchemaField[],
+  allFields: PropertySchemaField[],
+): PropertySchemaField | undefined {
+  return visibleFields.find((f) => f.key === key) ?? allFields.find((f) => f.key === key)
+}
+
+/**
+ * 조건이 판정에서 빠지는 이유 중 사용자에게 보여야 하는 것. 빈 값(입력 중)은 문제로 치지 않는다.
+ * out-of-scope — 필드가 보이는 레이어에 없다 (D5). op-mismatch — 스키마에서 필드 타입이 바뀌어 연산자가 안 맞는다.
+ */
+export function condProblem(
+  cond: FilterCond,
+  visibleFields: PropertySchemaField[],
+): 'out-of-scope' | 'op-mismatch' | null {
+  const field = visibleFields.find((f) => f.key === cond.key)
+  if (!field) return 'out-of-scope'
+  return opsFor(field.type).includes(cond.op) ? null : 'op-mismatch'
+}
+
 /** 보이는 레이어 기준의 활성 조건. 목록과 지도가 같은 것을 쓴다. */
 export function activeFilter(conds: FilterCond[], layers: Layer[]): FilterCond[] {
   return activeConds(conds, filterFields(layers, { visibleOnly: true }))

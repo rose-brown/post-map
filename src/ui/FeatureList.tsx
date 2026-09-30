@@ -164,7 +164,10 @@ export function FeatureList({
         {!rows.length && total > 0 && filters.length > 0 && (
           <div className="flex flex-col items-start gap-1.5 py-6" data-testid="filter-empty">
             <span className="text-[14px] font-semibold">조건에 맞는 도형이 없습니다</span>
-            <button onClick={() => setFilters([])} className="text-[12px] font-medium text-brand">
+            <button
+              onClick={() => setFilters([])}
+              className={`${embedded ? 'touch-target' : ''} text-[12px] font-medium text-brand`}
+            >
               필터 지우기
             </button>
           </div>

@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useStore } from '../store/useStore'
 import { uid, type PropertySchemaField } from '../types'
-import { activeConds, filterFields, opsFor, type FilterCond, type FilterOp } from '../filter'
+import { activeConds, condProblem, fieldFor, filterFields, opsFor, type FilterCond, type FilterOp } from '../filter'
 
 /**
  * 목록 헤더 아래에 펼치는 조건 편집 영역 (스펙 docs/superpowers/specs/2026-09-30-list-filter-design.md 4절).
@@ -25,7 +25,7 @@ export function FilterPanel({ embedded }: { embedded: boolean }) {
     () => new Set(activeConds(filters, visibleFields).map((c) => c.id)),
     [filters, visibleFields],
   )
-  const fieldOf = (key: string): PropertySchemaField | undefined => allFields.find((f) => f.key === key)
+  const fieldOf = (key: string): PropertySchemaField | undefined => fieldFor(key, visibleFields, allFields)
 
   // 모바일 바텀시트: 44px 는 레이아웃 조건으로 보장 (불변 규칙 7). iOS 는 16px 미만 입력칸에서 확대한다.
   const ctl = embedded ? 'touch-target text-[16px]' : 'h-8 text-[12px]'
@@ -60,11 +60,14 @@ export function FilterPanel({ embedded }: { embedded: boolean }) {
       {filters.map((cond) => {
         const field = fieldOf(cond.key)
         const inScope = visibleKeys.has(cond.key)
-        const ops = field ? opsFor(field.type) : [cond.op]
+        const problem = condProblem(cond, visibleFields)
+        // 타입이 바뀌어 안 맞는 연산자도 목록에 남겨 둔다 — 없으면 select 가 다른 연산자를 보여 적용된 것처럼 보인다.
+        const fieldOps = field ? opsFor(field.type) : []
+        const ops = fieldOps.includes(cond.op) ? fieldOps : [cond.op, ...fieldOps]
         return (
           <div
             key={cond.id}
-            className={`flex flex-wrap items-center gap-1.5 ${inScope ? '' : 'opacity-50'}`}
+            className={`flex flex-wrap items-center gap-1.5 ${problem ? 'opacity-50' : ''}`}
             data-testid="filter-row"
             data-active={active.has(cond.id)}
           >
@@ -121,7 +124,7 @@ export function FilterPanel({ embedded }: { embedded: boolean }) {
               />
             )}
             {field?.unit && <span className="text-[11px] text-ink-mut">{field.unit}</span>}
-            {!inScope && (
+            {problem && (
               <span className="text-[11px] text-ink-mut" data-testid="filter-inactive">
                 적용 안 됨
               </span>
