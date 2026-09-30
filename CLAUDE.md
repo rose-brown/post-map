@@ -10,7 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 한 디렉터리에 두 가지가 같이 있다.
 
 1. **앱** (루트) — Vite + React 19 + TS strict + Tailwind v4 + MapLibre + Terra Draw.
-   Phase 1(`docs/prompts/02-...` 완료 기준 10개)과 Phase 3(Supabase 다기기 동기화)이 구현돼 있고 **Phase 2 는 미착수**다.
+   Phase 1(`docs/prompts/02-...` 완료 기준 10개)과 Phase 3(Supabase 다기기 동기화)이 구현돼 있다. **Phase 2 는 목록 필터(F-71 일부)와 필터 버튼만** 있고
+   나머지(2-A 공간연산·Undo 는 설계·계획만, 테이블 뷰·파일 업로드·배경지도·경로)는 미착수다.
    Phase 3 은 PRD 대로가 아니라 축소판이다 — 설계는 `docs/superpowers/specs/2026-09-27-phase3-multidevice-sync-design.md`.
 2. **프롬프트 세트와 문서** (`docs/`) — 이 제품을 단계적으로 만들기 위한 프롬프트, PRD, 디자인 참조 목업.
 
@@ -31,10 +32,13 @@ npm test            # node --test 'tests/**/*.test.ts' — 순수 함수(매퍼�
 node --test tests/mappers.test.ts   # 단일 파일. Node 22 가 .ts 를 타입 제거로 바로 돌린다
 node scripts/lead50/run.ts <projectId> [--only 코드,…] [--dry-run]   # 월간선도50 갱신 (월 1회). 스펙 docs/superpowers/specs/2026-09-27-lead50-layer-design.md
 node scripts/lead50/top9.ts <projectId> [--dry-run]   # TOP9 사본만 다시 맞춤 (Supabase 키만 필요). run.ts 가 끝에서 자동으로 부른다
-node scripts/lead50/price.ts <projectId> [--dry-run]  # 진입가 구간 레이어 6개 (3/5/6.5/8/12억). 거래 블록에서 계산, run.ts 가 끝에서 자동으로 부른다
+node scripts/lead50/price.ts <projectId> [--dry-run]  # 진입가 구간 레이어 6개 (3/5/6.5/8/12억) + 원본의 entryPrice·ageYears. 거래 블록에서 계산, run.ts 가 끝에서 자동으로 부른다
 node scripts/presets/run.ts <projectId> [--dry-run]   # 필터 버튼 값을 모든 레이어 스키마에 (lead50 run.ts 가 끝에서 부른다, transit 뒤에는 수동). 실행 뒤 앱 탭은 새로고침
 node scripts/transit/run.ts <projectId> <GTFS_DataSet 경로> [--dry-run]   # 지하철 호선 24(역만) + 역세권·선릉/여의도/시청 30분·1시간 레이어. lead50 갱신 뒤 다시 돌린다. 스펙 docs/superpowers/specs/2026-09-29-transit-layers-design.md
 ```
+
+스크립트 순서: `lead50/run.ts` 는 끝에서 `top9 → price → presets` 를 알아서 부른다. `price.ts` 만 따로 돌렸으면 `top9.ts`(사본에 새 속성 전달) → `presets/run.ts` 순으로 잇고,
+`transit/run.ts` 뒤에도 `presets/run.ts` 를 다시 돌린다. 모두 스크립트 소유 키만 쓴다(lead50 스펙 D7). 쓰기 전에 항상 `--dry-run`.
 
 배포: **`main` 에 push 하면** `.github/workflows/deploy.yml` 이 빌드해 GitHub Pages(`/post-map/`)에 올린다.
 빌드 env 는 Actions 시크릿 `VITE_VWORLD_KEY`·`VITE_SUPABASE_URL`·`VITE_SUPABASE_ANON_KEY`.
@@ -121,6 +125,20 @@ IndexedDB(`db/db.ts`, Dexie)는 읽기 경로에서 빠졌다. 남은 용도는 
 `MapView` 의 모든 이펙트는 `mapReady` 상태로 게이트한다. **`map.isStyleLoaded()` 를 게이트로 쓰지 마라** —
 타일 로딩 중 false 로 흔들려서, 그걸로 막았더니 동심원이 영구히 렌더되지 않았다.
 
+### 목록 필터와 버튼 (Phase 2-B 의 F-71 일부)
+
+`src/filter.ts` → `ui/FilterBar.tsx`·`ui/FeatureList.tsx` → `map/MapView.tsx` → `scripts/presets` 를 같이 봐야 보인다.
+스펙 `docs/superpowers/specs/2026-09-30-list-filter-design.md`(D1~D11), `…-filter-buttons-design.md`(E1~E13).
+
+- 조건은 스토어 `filters` 에만 있다(저장 안 함, 새로고침하면 사라짐). 판정 `matches` 는 순수 함수이고 **세 곳이 같은 `activeFilter` 결과를 쓴다**:
+  목록 행, Terra Draw 동기화 이펙트(걸러진 도형은 숨긴 레이어와 같은 `removeFeatures` 경로), 아이콘 소스 `pointIcons`. 새 표시 경로를 만들면 여기에도 걸어라.
+- 지도에서는 **선택된 도형이 필터를 건너뛴다**(목록은 아님) — 없으면 필터 중 새로 찍은 점이 `finish → select` 직후 지워진다. 동심원(`rings`)은 거르지 않는다.
+- 대상은 보이는 레이어의 number·text 스키마 필드를 key 로 합친 것(같은 key 는 먼저 나온 정의). 필드가 안 보이게 된 조건은 지우지 않고 "적용 안 됨".
+- **버튼 값은 데이터다** — 스키마 필드의 `presets`. 값 표는 `scripts/presets/presets.ts` 에만 있고 `presets/run.ts` 가 key 로 모든 레이어에 덮어쓴다(앱은 편집하지 않는다).
+  버튼으로 만든 조건은 `preset: true` 이고 **같은 key 끼리 OR**, 직접 입력 조건·다른 key 는 AND. 구간 버튼의 `between` 은 양끝 포함이라 상한을 데이터 정밀도 한 칸 아래로 둔다
+  (진입가 `entryPrice` 는 억 둘째 자리 **내림** — 진입가 구간 레이어 `[하한, 상한)` 과 개수가 같다).
+- 목록이 수천 행이라 `Row` 는 `memo`, `goTo` 는 `useCallback`, 필터는 `useDeferredValue` 로 늦춰 쓴다. 빼면 필터 입력 한 글자에 1초 넘게 걸렸다.
+
 ## 제품 아키텍처 (문서를 읽어야 보이는 부분)
 
 **계층**: `Project → Layer → Feature`. Feature 는 GeoJSON geometry + `properties`(레이어 `PropertySchema` 필드)
@@ -187,6 +205,11 @@ Phase 1 구현 중 실제로 시간을 잡아먹은 것들이다. 같은 것을 
   새 프로젝트 uuid 는 클라이언트가 만들어 헤더에 먼저 박는다 (`repo.ts` 의 `createProject`).
 - **Storage 삭제에도 SELECT 정책이 필요하다.** 없으면 `remove()` 가 403 이다. Storage API 도
   `x-project-id` 헤더를 `request.headers` 로 넘긴다(실측) — 정책은 `storage.foldername(name)[1]` 로 조인다.
+- **Playwright 로 앱 상태를 볼 때 전역을 새로 노출하지 마라.** 스토어는 콘솔에서 `import()` 하되 URL 은
+  `performance.getEntriesByType('resource')` 에서 `/store/useStore` 를 찾아 쓴다 — HMR 뒤에는 `?t=` 가 붙어서 고정 경로로 import 하면 앱과 다른 빈 인스턴스가 온다.
+  지도·Terra Draw 인스턴스는 `.maplibregl-map` 요소의 `__reactFiber…` 에서 `.return` 을 타고 올라가 훅의 ref(`getCanvas`·`getSnapshot` 을 가진 것)를 찾는다.
+- **Git Bash 에서 `BASE_PATH=/` 는 `/Program Files/Git/` 로 바뀐다.** 배포 빌드를 로컬에서 볼 때는 `BASE_PATH=./ npx vite build --outDir …` + `vite preview --outDir …`
+  (`vite preview` 는 `base` 를 `/` 로 보므로 기본 빌드 `/post-map/` 은 흰 화면이다).
 - **Claude in Chrome 확장은 localhost 를 사이트 권한으로 막는다.** Playwright MCP 가 없으면
   `~/.npm/_npx/*/node_modules/playwright` + `~/Library/Caches/ms-playwright` 캐시 브라우저를
   `executablePath` 로 지정해 스크립트로 몬다. 다기기는 `localhost` 와 `127.0.0.1` 두 오리진으로 흉내 낸다.
@@ -262,11 +285,5 @@ Design Compiler 목업(`<x-dc>` + `text/x-dc` 스크립트)이다. **실행 가�
 - 번들이 1.82MB(gzip 494KB)이고 코드 스플리팅을 하지 않았다.
 - **스크립트가 레이어 스키마를 바꾼 뒤, 그 전에 열린 탭(다른 기기 포함)이 레이어를 저장하면 옛 스키마로 덮인다** — `repo.ts` 가 레이어를 행 전체로 upsert 한다. 필터 버튼(`presets`)·새 필드가 사라지면 `node scripts/presets/run.ts`·`price.ts` 를 다시 돌린다. 근본 수정(부분 업데이트)은 안 했다.
 - **스키마 밖 숫자 속성은 정보 페이지에서 "비어 있음" 으로 보인다** (`InfoPage` 가 자유 필드를 전부 `type: 'text'` 로 그린다). 스크립트가 만드는 레이어는 스키마에 필드를 넣어 피한다.
-- 목록은 `ui/FeatureList.tsx` 가 우측 패널(모바일은 바텀시트)에 상시 띄운다. 행을 누르면
-  point 는 `flyTo`, 나머지는 bbox `fitBounds` 로 이동한 뒤 정보 페이지를 연다.
-  **필터(F-71 일부)는 있다** — `src/filter.ts` 판정을 목록·지도 동기화·`pointIcons` 세 곳이 같이 쓴다. 조건은 스토어에만(새로고침하면 사라짐),
-  지도에서는 선택 도형이 예외, 동심원은 거르지 않는다. 스펙 `docs/superpowers/specs/2026-09-30-list-filter-design.md`.
-  목록은 수천 행이라 `Row` 는 `memo`, 필터는 `useDeferredValue` 로 늦춰 쓴다 — 빼면 한 글자에 1초 넘게 걸린다.
-  버튼 묶음은 스키마 필드 `presets`(스크립트 소유, `scripts/presets/presets.ts`)로 그린다 — 앱은 편집하지 않는다. 스펙 `2026-09-30-filter-buttons-design.md`.
-  버튼 조건(`preset: true`)은 같은 key 끼리 OR, 나머지는 AND (`matches`).
-  **테이블 뷰**(F-70·72~75)는 여전히 Phase 2 다.
+- 목록(`ui/FeatureList.tsx`)은 우측 패널(모바일은 바텀시트)에 상시 뜨고 필터가 붙어 있지만, 정렬·열·CSV 가 있는 **테이블 뷰**(F-70·72~75)는 여전히 Phase 2 다.
+- 레이어 패널의 레이어별 개수는 필터와 무관한 전체 개수다. 걸러진 개수는 목록 헤더(`통과 / 전체`)에만 나온다.
