@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  FILTER_LAYERS, appendTransitSchema, baseName, buildReverseGraph, copyRow, minutesVia, nearStops,
+  FILTER_LAYERS, appendTransitSchema, baseName, boardWaits, buildReverseGraph, copyRow, minutesVia, nearStops,
   parseTime, secondsTo, targetStops, transitProps, tripSequences, walkSeconds, withTransit, filterSchema,
 } from '../scripts/transit/build.ts'
 import type { Stop, StopTime } from '../scripts/transit/build.ts'
@@ -111,4 +111,28 @@ test('스키마: 원본에는 뒤에 붙이고, 필터 레이어는 사용자가
   assert.equal(appendTransitSchema(s).length, s.length)
   const f = filterSchema([{ key: 'minSeolleung', label: '선릉(분)', type: 'number' }])
   assert.equal(f.find((x) => x.key === 'minSeolleung')!.label, '선릉(분)')
+})
+
+const H7 = 7 * 3600
+
+test('boardWaits: 방향별, 07~09시만, 급행은 다른 키, 창 밖이면 하루 폴백', () => {
+  const trips = tripSequences([
+    st('L_Ord001', 'A', 1, H7), st('L_Ord001', 'B', 2, H7 + 120),
+    st('L_Ord002', 'A', 1, H7 + 600), st('L_Ord002', 'B', 2, H7 + 720),
+    st('L_Ord003', 'A', 1, H7 + 1200), st('L_Ord003', 'B', 2, H7 + 1320),
+    st('L_Ord004', 'A', 1, H7 + 1800), st('L_Ord004', 'B', 2, H7 + 1920),
+    st('L_Ord005', 'A', 1, 10 * 3600), st('L_Ord005', 'B', 2, 10 * 3600 + 120),   // 창 밖 — 안 센다
+    st('R_Ord001', 'B', 1, H7), st('R_Ord001', 'A', 2, H7 + 120),                  // 반대 방향 1회
+    st('E_Ord001', 'A', 1, H7 + 100), st('E_Ord001', 'C', 2, H7 + 400),            // 급행 A→C
+    st('N_Ord001', 'D', 1, 12 * 3600), st('N_Ord001', 'E', 2, 12 * 3600 + 60),     // 낮에만 2회
+    st('N_Ord002', 'D', 1, 13 * 3600), st('N_Ord002', 'E', 2, 13 * 3600 + 60),
+    st('M_Ord001', 'F', 1, 25 * 3600), st('M_Ord001', 'G', 2, 25 * 3600 + 60),     // 24시 넘어서만
+  ])
+  const { waits, fallback } = boardWaits(trips)
+  assert.equal(waits.get('A>B'), 7200 / 4 / 2)
+  assert.equal(waits.get('B>A'), 7200 / 1 / 2)
+  assert.equal(waits.get('A>C'), 3600)
+  assert.equal(waits.get('D>E'), 68400 / 2 / 2)
+  assert.equal(waits.has('F>G'), false)
+  assert.deepEqual(fallback, ['D>E'])
 })

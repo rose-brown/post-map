@@ -111,6 +111,49 @@ const median = (xs: number[]): number => {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
 }
 
+/** 출근 시간 창 (스펙 transit-wait W2). 도착시각 기준, 끝은 제외. */
+export const PEAK_WINDOW: [number, number] = [7 * 3600, 9 * 3600]
+/** 창 안에 운행이 없을 때의 폴백 (W4). */
+const DAY_WINDOW: [number, number] = [5 * 3600, 24 * 3600]
+
+/**
+ * 구간 a→b 로 출발하는 열차를 탈 때의 평균 대기 = 배차간격 ÷ 2 (W1·W3).
+ * 방향별로 센다 — 양방향을 합치면 대기가 절반으로 준다. 급행(다음 정차가 다름)은 다른 키다.
+ */
+export function boardWaits(
+  trips: Map<string, StopTime[]>,
+  window: [number, number] = PEAK_WINDOW,
+): { waits: Map<string, number>; fallback: string[] } {
+  const inWindow = new Map<string, number>()
+  const inDay = new Map<string, number>()
+  const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1)
+  for (const seq of trips.values()) {
+    for (let i = 0; i + 1 < seq.length; i++) {
+      const a = seq[i]
+      const b = seq[i + 1]
+      if (a.stopId === b.stopId) continue
+      const k = `${a.stopId}>${b.stopId}`
+      if (a.arrival >= window[0] && a.arrival < window[1]) bump(inWindow, k)
+      if (a.arrival >= DAY_WINDOW[0] && a.arrival < DAY_WINDOW[1]) bump(inDay, k)
+    }
+  }
+  const waits = new Map<string, number>()
+  const fallback: string[] = []
+  for (const k of new Set([...inWindow.keys(), ...inDay.keys()])) {
+    const n = inWindow.get(k)
+    if (n) {
+      waits.set(k, (window[1] - window[0]) / n / 2)
+      continue
+    }
+    const d = inDay.get(k)
+    if (d) {
+      waits.set(k, (DAY_WINDOW[1] - DAY_WINDOW[0]) / d / 2)
+      fallback.push(k)
+    }
+  }
+  return { waits, fallback: fallback.sort() }
+}
+
 /** 연속 정차 간 도착시각 차의 중앙값(방향별) + 환승 간선. */
 export function buildReverseGraph(trips: Map<string, StopTime[]>, transfers: Transfer[]): ReverseGraph {
   const samples = new Map<string, number[]>()
