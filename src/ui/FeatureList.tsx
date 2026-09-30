@@ -129,7 +129,7 @@ export function FeatureList({
         <div className="flex-1" />
         <button
           onClick={() => setFilterOpen((v) => !v)}
-          disabled={!canFilter}
+          disabled={!canFilter && !filterOpen}
           aria-pressed={filterOpen}
           data-testid="filter-toggle"
           className={`rounded-full px-2.5 py-1 text-[11px] font-medium disabled:opacity-40 ${

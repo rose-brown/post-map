@@ -1,12 +1,16 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useStore } from '../store/useStore'
 import { uid, type PropertySchemaField } from '../types'
-import { activeConds, condProblem, fieldFor, filterFields, opsFor, type FilterCond, type FilterOp } from '../filter'
+import {
+  activeConds, condProblem, fieldFor, filterFields, hasManualConds, opsFor, presetFields, presetOn, togglePreset,
+  type FilterCond, type FilterOp,
+} from '../filter'
 
 /**
  * 목록 헤더 아래에 펼치는 조건 편집 영역 (스펙 docs/superpowers/specs/2026-09-30-list-filter-design.md 4절).
  * 필드 목록은 보이는 레이어 기준, 라벨은 전체 레이어 기준 — 레이어를 꺼서 판정에서 빠진 조건도
  * 제목을 그려야 한다 (D5·D6). 불변 규칙 6 — 도메인 용어 없음, 라벨은 스키마에서 온다.
+ * 버튼 묶음(스펙 2026-09-30-filter-buttons E1~E11)은 스키마 presets 로 그린다 — 값은 데이터에만 있다.
  */
 
 const OP_LABEL: Record<FilterOp, string> = { gte: '이상', lte: '이하', between: '사이', contains: '포함' }
@@ -26,6 +30,14 @@ export function FilterPanel({ embedded }: { embedded: boolean }) {
     [filters, visibleFields],
   )
   const fieldOf = (key: string): PropertySchemaField | undefined => fieldFor(key, visibleFields, allFields)
+  const groups = useMemo(() => presetFields(layers), [layers])
+  const [more, setMore] = useState(false)
+  const [manualOpen, setManualOpen] = useState(false)
+  // 버튼으로 보이지 않는 조건이 있으면 직접 입력을 펼쳐 둔다 — 숨으면 "왜 걸러지지?" 가 된다 (E11).
+  const manualForced = useMemo(() => hasManualConds(filters, visibleFields), [filters, visibleFields])
+  const showManual = manualOpen || manualForced || groups.length === 0
+  const shownGroups = more ? groups : groups.slice(0, 3)
+  const btn = embedded ? 'touch-target text-[14px]' : 'h-7 text-[12px]'
 
   // 모바일 바텀시트: 44px 는 레이아웃 조건으로 보장 (불변 규칙 7). iOS 는 16px 미만 입력칸에서 확대한다.
   const ctl = embedded ? 'touch-target text-[16px]' : 'h-8 text-[12px]'
@@ -57,7 +69,51 @@ export function FilterPanel({ embedded }: { embedded: boolean }) {
 
   return (
     <div className="flex flex-col gap-2 border-b border-line bg-surface-sub px-4 py-3" data-testid="filter-panel">
-      {filters.map((cond) => {
+      {shownGroups.map((f) => (
+        <div key={f.key} data-testid="preset-group" data-key={f.key}>
+          <div className="text-[12px] font-semibold">{f.label}</div>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {f.presets!.map((p) => {
+              const on = presetOn(filters, f.key, p)
+              return (
+                <button
+                  key={p.label}
+                  onClick={() => setFilters(togglePreset(filters, f.key, p, uid('flt')))}
+                  aria-pressed={on}
+                  data-testid="preset-button"
+                  className={`${btn} rounded-lg px-2.5 ${on ? 'bg-brand text-white' : 'border border-line bg-surface text-ink'}`}
+                >
+                  {p.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+
+      {groups.length > 0 && (
+        <div className="flex items-center gap-3">
+          {groups.length > 3 && (
+            <button
+              onClick={() => setMore((v) => !v)}
+              className={`${embedded ? 'touch-target' : ''} text-[12px] font-medium text-brand`}
+              data-testid="preset-more"
+            >
+              {more ? '▴ 접기' : `▾ 더보기 (${groups.length - 3})`}
+            </button>
+          )}
+          <button
+            onClick={() => setManualOpen((v) => !v)}
+            disabled={manualForced}
+            className={`${embedded ? 'touch-target' : ''} text-[12px] text-ink-mut disabled:opacity-60`}
+            data-testid="manual-toggle"
+          >
+            직접 입력 {showManual ? '▴' : '›'}
+          </button>
+        </div>
+      )}
+
+      {showManual && filters.map((cond) => {
         const field = fieldOf(cond.key)
         const inScope = visibleKeys.has(cond.key)
         const problem = condProblem(cond, visibleFields)
@@ -142,14 +198,16 @@ export function FilterPanel({ embedded }: { embedded: boolean }) {
       })}
 
       <div className="flex items-center">
-        <button
-          onClick={add}
-          disabled={!visibleFields.length}
-          className={`${embedded ? 'touch-target' : ''} text-[12px] font-medium text-brand disabled:text-ink-mut`}
-          data-testid="filter-add"
-        >
-          + 조건 추가
-        </button>
+        {showManual && (
+          <button
+            onClick={add}
+            disabled={!visibleFields.length}
+            className={`${embedded ? 'touch-target' : ''} text-[12px] font-medium text-brand disabled:text-ink-mut`}
+            data-testid="filter-add"
+          >
+            + 조건 추가
+          </button>
+        )}
         <div className="flex-1" />
         {filters.length > 0 && (
           <button

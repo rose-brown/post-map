@@ -79,7 +79,8 @@ export function App() {
             <BottomSheet
               snap={snap}
               onSnapChange={setSnap}
-              title={sheet === 'layers' ? '레이어' : sheet === 'list' ? '기록' : '정보 페이지'}
+              // 접힘(88px)에서는 시트 제목만 보인다 — 개수 줄이 잘리므로 필터가 켜져 있음을 제목에 적는다.
+              title={sheet === 'layers' ? '레이어' : sheet === 'list' ? (filterOn ? '기록 · 필터 적용 중' : '기록') : '정보 페이지'}
               onClose={() => {
                 // 정보 페이지를 닫으면 목록으로 돌아간다 (PC 의 '← 목록' 과 같은 동작).
                 if (sheet === 'info') {
