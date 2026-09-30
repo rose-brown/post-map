@@ -27,6 +27,7 @@ function useIsMobile() {
 export function App() {
   const [map, setMap] = useState<MapLibreMap | null>(null)
   const [layersOpen, setLayersOpen] = useState(true)
+  const [listOpen, setListOpen] = useState(true)
   const [sheet, setSheet] = useState<'layers' | 'list' | 'info' | null>(null)
   const [snap, setSnap] = useState<Snap>('half')
 
@@ -48,6 +49,11 @@ export function App() {
     }
     setSheet('info')
     setSnap('half')
+  }, [selectedId])
+
+  // PC 우측 패널을 접은 채 도형을 고르면 정보 페이지가 안 보인다 — 선택이 생기면 편다 (스펙 filter-buttons E12).
+  useEffect(() => {
+    if (selectedId) setListOpen(true)
   }, [selectedId])
 
   /* ---------------- 모바일: 지도 전체화면 + 하단 도구 바 + 바텀시트 ---------------- */
@@ -166,13 +172,30 @@ export function App() {
             {layersOpen ? '◀ 패널' : '▶ 패널'}
           </button>
 
+          <button
+            onClick={() => setListOpen((v) => !v)}
+            className="absolute right-12 top-2 z-10 rounded-lg border border-line bg-surface/95 px-2 py-1.5 text-[12px] shadow-md backdrop-blur"
+            data-testid="toggle-list-panel"
+          >
+            {listOpen ? '패널 ▶' : '◀ 목록'}
+            {!listOpen && filterOn && (
+              <span
+                className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-brand align-middle"
+                data-testid="list-panel-filter-dot"
+                aria-label="필터 적용 중"
+              />
+            )}
+          </button>
+
           <div className="absolute left-2 top-12 z-10">
             <Toolbar orientation="vertical" />
           </div>
         </div>
 
         <aside
-          className="w-[360px] flex-none border-l border-line bg-surface"
+          className={`flex-none border-l border-line bg-surface transition-[width] duration-200 ${
+            listOpen ? 'w-[360px]' : 'w-0 overflow-hidden border-l-0'
+          }`}
           data-testid="info-panel"
         >
           {/* 목업의 "목록 ↔ 정보 페이지" 전환. 선택이 없으면 항상 목록이 보인다. */}
