@@ -27,6 +27,11 @@ Phase 2 는 계획만 있고 손대지 않았다.
 진입가 = 평형별 최근 거래 중 최저 (`entryTrade`). 거래 없는 80단지는 없다. lead50 스펙 D13, `scripts/lead50/price.ts`.
 설계 `docs/superpowers/specs/2026-09-29-transit-layers-design.md`, 기록 `docs/log/2026-09-29.md`.
 
+**목록 필터 (2026-09-30)** — Phase 2-B 의 F-71 만 먼저 했다. 목록 헤더 `필터` 로 number·text 스키마 필드에 AND 조건
+(`이상/이하/사이/포함`), 목록·지도가 같이 걸러진다. 조건은 저장하지 않는다. 동기는 `docs/book/Location.json` 입지 체크리스트로
+월간선도50 을 좁혀 보는 것 — 다음은 스펙 7절의 데이터 추가(0순위: 진입가·준공연도 숫자 필드). 이 PC 의 `.env` 에는 이제 `MOLIT_KEY` 가 있다.
+설계 `docs/superpowers/specs/2026-09-30-list-filter-design.md`, 계획 `docs/superpowers/plans/2026-09-30-list-filter.md`, 기록 `docs/log/2026-09-30.md`.
+
 `npm test` 통과 · `npm run typecheck` 통과 · `npm run build` 통과.
 `main` 은 원격과 같다.
 

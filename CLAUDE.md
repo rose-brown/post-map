@@ -261,4 +261,7 @@ Design Compiler 목업(`<x-dc>` + `text/x-dc` 스크립트)이다. **실행 가�
 - **스키마 밖 숫자 속성은 정보 페이지에서 "비어 있음" 으로 보인다** (`InfoPage` 가 자유 필드를 전부 `type: 'text'` 로 그린다). 스크립트가 만드는 레이어는 스키마에 필드를 넣어 피한다.
 - 목록은 `ui/FeatureList.tsx` 가 우측 패널(모바일은 바텀시트)에 상시 띄운다. 행을 누르면
   point 는 `flyTo`, 나머지는 bbox `fitBounds` 로 이동한 뒤 정보 페이지를 연다.
-  정렬·필터가 붙는 **테이블 뷰**는 여전히 Phase 2 다.
+  **필터(F-71 일부)는 있다** — `src/filter.ts` 판정을 목록·지도 동기화·`pointIcons` 세 곳이 같이 쓴다. 조건은 스토어에만(새로고침하면 사라짐),
+  지도에서는 선택 도형이 예외, 동심원은 거르지 않는다. 스펙 `docs/superpowers/specs/2026-09-30-list-filter-design.md`.
+  목록은 수천 행이라 `Row` 는 `memo`, 필터는 `useDeferredValue` 로 늦춰 쓴다 — 빼면 한 글자에 1초 넘게 걸린다.
+  **테이블 뷰**(F-70·72~75)는 여전히 Phase 2 다.
