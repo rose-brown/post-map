@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { activeConds, activeFilter, condProblem, fieldFor, filterFields, hasManualConds, matches, opsFor, presetFields, presetOn, togglePreset, type FilterCond } from '../src/filter.ts'
+import { activeConds, activeFilter, condProblem, fieldFor, filterFields, hasManualConds, matches, opsFor, presetFields, presetOn, shownPresetGroups, togglePreset, type FilterCond } from '../src/filter.ts'
 import type { Feature, FilterPreset, Layer, PropertySchemaField } from '../src/types.ts'
 
 const layer = (id: string, schema: PropertySchemaField[], visible = true): Layer => ({
@@ -164,4 +164,11 @@ test('hasManualConds: 버튼으로 표현 안 되는 조건이 있으면 true', 
   assert.equal(hasManualConds([c('n', 'gte', '1')], fields), true)      // presets 없는 필드
   assert.equal(hasManualConds([c('gone', 'gte', '1')], fields), true)   // 적용 안 됨
   assert.equal(hasManualConds([c('h', 'gte', '')], fields), true)       // 입력 중인 빈 조건
+})
+
+test('shownPresetGroups: 처음 3개 + 조건이 걸린 묶음은 접어도 보인다', () => {
+  const g = ['a', 'b', 'c', 'd', 'e'].map((k) => withP(num(k), [pre('1', 'gte', '1')]))
+  assert.deepEqual(shownPresetGroups(g, [], false).map((f) => f.key), ['a', 'b', 'c'])
+  assert.deepEqual(shownPresetGroups(g, [c('e', 'gte', '1')], false).map((f) => f.key), ['a', 'b', 'c', 'e'])
+  assert.deepEqual(shownPresetGroups(g, [], true).map((f) => f.key), ['a', 'b', 'c', 'd', 'e'])
 })

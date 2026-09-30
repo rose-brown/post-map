@@ -8,11 +8,11 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readLayers, supabaseClient } from '../lead50/sb.ts'
 import type { Sb } from '../lead50/sb.ts'
-import { withPresets } from './presets.ts'
+import { schemaChanged, withPresets } from './presets.ts'
 
 export async function syncPresets(sb: Sb, projectId: string, dryRun: boolean): Promise<void> {
   const layers = await readLayers(sb, projectId)
-  const changed = layers.filter((l) => JSON.stringify(withPresets(l.schema)) !== JSON.stringify(l.schema))
+  const changed = layers.filter((l) => schemaChanged(l.schema, withPresets(l.schema)))
   console.log(JSON.stringify({ layers: layers.length, changed: changed.map((l) => l.name), dryRun }, null, 2))
   if (dryRun) return
   for (const l of changed) {

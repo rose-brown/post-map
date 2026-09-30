@@ -24,3 +24,12 @@ export const PRESETS: Record<string, FilterPreset[]> = {
 export function withPresets(schema: PropertySchemaField[]): PropertySchemaField[] {
   return schema.map((f) => (f.type === 'number' && PRESETS[f.key] ? { ...f, presets: PRESETS[f.key] } : f))
 }
+
+/** 키 순서를 무시한 비교. jsonb 는 객체 키를 다시 정렬해 돌려줘서 JSON.stringify 비교가 늘 "바뀜" 이었다 (최종 검토 2026-09-30). */
+export function schemaChanged(a: PropertySchemaField[], b: PropertySchemaField[]): boolean {
+  const canon = (v: unknown): unknown =>
+    Array.isArray(v) ? v.map(canon)
+      : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).sort(([x], [y]) => x.localeCompare(y)).map(([k, x]) => [k, canon(x)]))
+      : v
+  return JSON.stringify(canon(a)) !== JSON.stringify(canon(b))
+}

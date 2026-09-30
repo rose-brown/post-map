@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useStore } from '../store/useStore'
 import { uid, type PropertySchemaField } from '../types'
 import {
-  activeConds, condProblem, fieldFor, filterFields, hasManualConds, opsFor, presetFields, presetOn, togglePreset,
+  activeConds, condProblem, fieldFor, filterFields, hasManualConds, opsFor, presetFields, presetOn, shownPresetGroups, togglePreset,
   type FilterCond, type FilterOp,
 } from '../filter'
 
@@ -36,7 +36,7 @@ export function FilterPanel({ embedded }: { embedded: boolean }) {
   // 버튼으로 보이지 않는 조건이 있으면 직접 입력을 펼쳐 둔다 — 숨으면 "왜 걸러지지?" 가 된다 (E11).
   const manualForced = useMemo(() => hasManualConds(filters, visibleFields), [filters, visibleFields])
   const showManual = manualOpen || manualForced || groups.length === 0
-  const shownGroups = more ? groups : groups.slice(0, 3)
+  const shownGroups = shownPresetGroups(groups, filters, more)
   const btn = embedded ? 'touch-target text-[14px]' : 'h-7 text-[12px]'
 
   // 모바일 바텀시트: 44px 는 레이아웃 조건으로 보장 (불변 규칙 7). iOS 는 16px 미만 입력칸에서 확대한다.

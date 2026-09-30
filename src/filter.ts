@@ -141,3 +141,8 @@ export function hasManualConds(conds: FilterCond[], visibleFields: PropertySchem
     return !presets.some((p) => p.op === c.op && sameValue(c.value, p.value))
   })
 }
+
+/** E10 + E11: 처음 3묶음, 조건이 걸린 묶음은 더보기를 접어도 보인다 — 패널이 다시 열리면 more 가 초기화된다. */
+export function shownPresetGroups(groups: PropertySchemaField[], conds: FilterCond[], more: boolean): PropertySchemaField[] {
+  return groups.filter((g, i) => more || i < 3 || conds.some((c) => c.key === g.key))
+}

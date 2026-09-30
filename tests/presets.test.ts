@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { PRESETS, withPresets } from '../scripts/presets/presets.ts'
+import { PRESETS, schemaChanged, withPresets } from '../scripts/presets/presets.ts'
 import { opsFor } from '../src/filter.ts'
 import type { PropertySchemaField } from '../src/types.ts'
 
@@ -29,4 +29,12 @@ test('PRESETS: 스펙 8절 key 전부, 연산자는 모두 number 연산자, 값
   }
   assert.deepEqual(PRESETS.households.map((p) => p.label), ['300~', '500~', '1000~', '2000~', '3000~'])
   assert.deepEqual(PRESETS.entryPrice.at(-1), { label: '12억~', op: 'gte', value: '12' })
+})
+
+test('schemaChanged: jsonb 가 키 순서를 바꿔 돌려줘도 같은 내용이면 false', () => {
+  const ours = withPresets([{ key: 'households', label: '총세대수', type: 'number', unit: '세대' }])
+  const fromDb = JSON.parse(JSON.stringify(ours).replace(/"label":("[^"]*"),"op":("[^"]*")/g, '"op":$2,"label":$1'))
+  assert.notEqual(JSON.stringify(fromDb), JSON.stringify(ours))   // 키 순서가 정말 다르다
+  assert.equal(schemaChanged(fromDb, ours), false)
+  assert.equal(schemaChanged([{ key: 'households', label: '총세대수', type: 'number' }], ours), true)
 })
