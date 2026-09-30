@@ -154,17 +154,30 @@ export function boardWaits(
   return { waits, fallback: fallback.sort() }
 }
 
-/** 연속 정차 간 도착시각 차의 중앙값(방향별) + 환승 간선. */
-export function buildReverseGraph(trips: Map<string, StopTime[]>, transfers: Transfer[]): ReverseGraph {
+/**
+ * 정류장 P:<stop> 과 열차 위 R:<a>><b> 로 나눈 역방향 그래프 (스펙 transit-wait W5·W6).
+ *   탑승 P(a)→R(a>b) = 대기(a>b) + 승차(a>b)   — 대기가 붙는 유일한 간선
+ *   계속 R(a>b)→R(b>c) = 승차(b>c)               — 실제 운행에 a,b,c 가 이어서 있을 때만 (급행·완행을 섞지 않는다)
+ *   하차 R(a>b)→P(b) = 0,  환승 P(a)→P(b) = transfers.txt 초
+ * 승차 = 연속 정차 간 도착시각 차의 중앙값(방향별). dt ≤ 0 인 구간은 끊긴 것으로 본다.
+ */
+export function buildWaitGraph(trips: Map<string, StopTime[]>, transfers: Transfer[], waits: Map<string, number>): ReverseGraph {
   const samples = new Map<string, number[]>()
+  const continues = new Set<string>()
   for (const seq of trips.values()) {
+    let prevKey: string | undefined
     for (let i = 1; i < seq.length; i++) {
       const dt = seq[i].arrival - seq[i - 1].arrival
-      if (dt <= 0 || seq[i].stopId === seq[i - 1].stopId) continue
+      if (dt <= 0 || seq[i].stopId === seq[i - 1].stopId) {
+        prevKey = undefined
+        continue
+      }
       const k = `${seq[i - 1].stopId}>${seq[i].stopId}`
       const list = samples.get(k)
       if (list) list.push(dt)
       else samples.set(k, [dt])
+      if (prevKey) continues.add(`${prevKey}|${k}`)
+      prevKey = k
     }
   }
   const g: ReverseGraph = new Map()
@@ -173,11 +186,18 @@ export function buildReverseGraph(trips: Map<string, StopTime[]>, transfers: Tra
     if (list) list.push([from, s])
     else g.set(to, [[from, s]])
   }
-  for (const [k, xs] of samples) {
-    const [from, to] = k.split('>')
-    add(from, to, median(xs))
+  const ride = new Map([...samples].map(([k, xs]) => [k, median(xs)]))
+  for (const [k, r] of ride) {
+    const [a, b] = k.split('>')
+    const w = waits.get(k)
+    if (w !== undefined) add(`P:${a}`, `R:${k}`, w + r)
+    add(`R:${k}`, `P:${b}`, 0)
   }
-  for (const t of transfers) add(t.from, t.to, t.seconds)
+  for (const c of continues) {
+    const [k1, k2] = c.split('|')
+    add(`R:${k1}`, `R:${k2}`, ride.get(k2)!)
+  }
+  for (const t of transfers) add(`P:${t.from}`, `P:${t.to}`, t.seconds)
   return g
 }
 
@@ -196,6 +216,13 @@ export function secondsTo(g: ReverseGraph, targets: string[]): Map<string, numbe
       if (nd < (dist.get(from) ?? Infinity)) dist.set(from, nd)
     }
   }
+}
+
+/** 역(stop id) 에서 기준역까지의 초 — 정류장 정점만 골라 키를 stop id 로 되돌린다. */
+export function stationSecondsTo(g: ReverseGraph, targetStopIds: string[]): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const [node, s] of secondsTo(g, targetStopIds.map((t) => `P:${t}`))) if (node.startsWith('P:')) out.set(node.slice(2), s)
+  return out
 }
 
 /** 기준역 = 이름 괄호 앞이 정확히 같은 stop 들 ("시청·용인대" 는 아니다). */

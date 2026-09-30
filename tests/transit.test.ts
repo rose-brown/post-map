@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  FILTER_LAYERS, appendTransitSchema, baseName, boardWaits, buildReverseGraph, copyRow, minutesVia, nearStops,
-  parseTime, secondsTo, targetStops, transitProps, tripSequences, walkSeconds, withTransit, filterSchema,
+  FILTER_LAYERS, appendTransitSchema, baseName, boardWaits, buildWaitGraph, copyRow, minutesVia, nearStops,
+  parseTime, stationSecondsTo, targetStops, transitProps, tripSequences, walkSeconds, withTransit, filterSchema,
 } from '../scripts/transit/build.ts'
 import type { Stop, StopTime } from '../scripts/transit/build.ts'
 import type { FeatureRow } from '../src/db/mappers.ts'
@@ -19,22 +19,6 @@ test('parseTime: 24시를 넘는 값', () => {
 test('baseName: 끝 괄호만 뗀다', () => {
   assert.equal(baseName('시청(1호선)'), '시청')
   assert.equal(baseName('시청·용인대'), '시청·용인대')
-})
-
-test('buildReverseGraph + secondsTo: 간선은 중앙값, 환승 포함, 방향 구분', () => {
-  const trips = tripSequences([
-    st('R_Ord001', 'A', 1, 0), st('R_Ord001', 'B', 2, 120), st('R_Ord001', 'C', 3, 300),
-    st('R_Ord002', 'A', 1, 1000), st('R_Ord002', 'B', 2, 1100),
-    st('R_Ord003', 'A', 1, 2000), st('R_Ord003', 'B', 2, 2600),   // 이상값 — 중앙값이 흡수
-    st('Q_Ord001', 'X', 1, 0), st('Q_Ord001', 'Y', 2, 60),
-  ])
-  const g = buildReverseGraph(trips, [{ from: 'C', to: 'X', seconds: 90 }])
-  const d = secondsTo(g, ['Y'])
-  // A→B 중앙값 120, B→C 180, C→X 환승 90, X→Y 60
-  assert.equal(d.get('A'), 120 + 180 + 90 + 60)
-  assert.equal(d.get('X'), 60)
-  // 역방향 운행이 없으면 닿지 않는다
-  assert.equal(secondsTo(g, ['A']).get('C'), undefined)
 })
 
 test('targetStops: 이름이 정확히 같은 역만, 없으면 실패', () => {
@@ -135,4 +119,47 @@ test('boardWaits: 방향별, 07~09시만, 급행은 다른 키, 창 밖이면 �
   assert.equal(waits.get('D>E'), 68400 / 2 / 2)
   assert.equal(waits.has('F>G'), false)
   assert.deepEqual(fallback, ['D>E'])
+})
+
+test('buildWaitGraph + stationSecondsTo: 탈 때마다 대기, 같은 열차 중간역은 대기 없음, 중앙값 승차', () => {
+  const L = (n: number, t: number, dtAB = 120) => [st(`L_Ord00${n}`, 'A', 1, t), st(`L_Ord00${n}`, 'B', 2, t + dtAB), st(`L_Ord00${n}`, 'C', 3, t + dtAB + 180)]
+  const trips = tripSequences([
+    ...L(1, H7), ...L(2, H7 + 1800), ...L(3, H7 + 3600, 900), ...L(4, H7 + 5400),   // 4회 → 대기 900, A→B 중앙값 120 (이상값 900 흡수)
+    st('Q_Ord001', 'X', 1, H7), st('Q_Ord001', 'Y', 2, H7 + 60),                    // 1회 → 대기 3600
+  ])
+  const { waits } = boardWaits(trips)
+  const g = buildWaitGraph(trips, [{ from: 'C', to: 'X', seconds: 90 }], waits)
+  const d = stationSecondsTo(g, ['Y'])
+  assert.equal(d.get('Y'), 0)
+  assert.equal(d.get('X'), 3600 + 60)
+  assert.equal(d.get('A'), 900 + 120 + 180 + 90 + 3600 + 60)   // 대기는 A 에서 한 번, 환승 뒤 한 번
+  assert.equal(d.get('B'), 900 + 180 + 90 + 3600 + 60)
+  assert.equal(stationSecondsTo(g, ['A']).get('C'), undefined)  // 역방향 운행 없음
+})
+
+test('buildWaitGraph: 운행에 a,b,c 가 이어서 없으면 b 에서 내려 다시 탄다 (대기 두 번)', () => {
+  const trips = tripSequences([
+    st('S_Ord001', 'A', 1, H7), st('S_Ord001', 'B', 2, H7 + 100),
+    st('T_Ord001', 'B', 1, H7 + 200), st('T_Ord001', 'C', 2, H7 + 300),
+  ])
+  const { waits } = boardWaits(trips)
+  const d = stationSecondsTo(buildWaitGraph(trips, [], waits), ['C'])
+  assert.equal(d.get('A'), 3600 + 100 + 3600 + 100)
+})
+
+test('buildWaitGraph: 도착시각이 같은 연속 정차는 승차·탑승 간선이 없다', () => {
+  const trips = tripSequences([st('Z_Ord001', 'A', 1, H7), st('Z_Ord001', 'B', 2, H7)])
+  const { waits } = boardWaits(trips)
+  assert.equal(stationSecondsTo(buildWaitGraph(trips, [], waits), ['B']).get('A'), undefined)
+})
+
+test('buildWaitGraph: 대기가 긴 직행보다 대기가 짧은 환승이 빠르면 환승', () => {
+  const trips = tripSequences([
+    st('D_Ord001', 'A', 1, H7), st('D_Ord001', 'Y', 2, H7 + 600),
+    ...[0, 1, 2, 3, 4, 5].flatMap((i) => [st(`F_Ord00${i}`, 'A', 1, H7 + i * 1200), st(`F_Ord00${i}`, 'M', 2, H7 + i * 1200 + 300)]),
+    ...[0, 1, 2, 3, 4, 5].flatMap((i) => [st(`G_Ord00${i}`, 'N', 1, H7 + i * 1200), st(`G_Ord00${i}`, 'Y', 2, H7 + i * 1200 + 300)]),
+  ])
+  const { waits } = boardWaits(trips)
+  const d = stationSecondsTo(buildWaitGraph(trips, [{ from: 'M', to: 'N', seconds: 120 }], waits), ['Y'])
+  assert.equal(d.get('A'), 600 + 300 + 120 + 600 + 300)   // 1920 < 직행 4200
 })
