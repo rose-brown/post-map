@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Map as MapLibreMap } from 'maplibre-gl'
 import { MapView } from './map/MapView'
 import { TopBar } from './ui/TopBar'
@@ -9,6 +9,7 @@ import { FeatureList } from './ui/FeatureList'
 import { BottomSheet, type Snap } from './ui/BottomSheet'
 import { useStore } from './store/useStore'
 import { vworldBasemap } from './providers/basemap'
+import { activeFilter } from './filter'
 
 function useIsMobile() {
   const [mobile, setMobile] = useState(
@@ -34,6 +35,10 @@ export function App() {
   const select = useStore((s) => s.select)
   const basemapId = useStore((s) => s.basemapId)
   const setBasemap = useStore((s) => s.setBasemap)
+  const filters = useStore((s) => s.filters)
+  const layers = useStore((s) => s.layers)
+  // 시트를 닫아도 필터는 지도에 남는다. 점이 왜 적은지 보이게 목록 버튼에 표시한다 (스펙 1절 5).
+  const filterOn = useMemo(() => activeFilter(filters, layers).length > 0, [filters, layers])
 
   // 도형을 선택하면 정보 페이지가 열린다. 모바일은 바텀시트로.
   useEffect(() => {
@@ -121,6 +126,13 @@ export function App() {
             data-testid="open-list-sheet"
           >
             목록
+            {filterOn && (
+              <span
+                className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-brand align-middle"
+                data-testid="list-filter-dot"
+                aria-label="필터 적용 중"
+              />
+            )}
           </button>
           <Toolbar orientation="horizontal" />
         </div>
