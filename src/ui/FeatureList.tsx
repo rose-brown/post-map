@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { memo, useCallback, useDeferredValue, useMemo, useState } from 'react'
 import type { Map as MapLibreMap } from 'maplibre-gl'
 import bbox from '@turf/bbox'
 import { useStore } from '../store/useStore'
@@ -30,13 +30,16 @@ const GEOMETRY_ICON: Record<string, string> = {
   MultiPoint: '•',
 }
 
+// toLocaleString 은 호출마다 포매터를 새로 만든다. 필터 입력마다 수천 행을 다시 그리므로 하나를 재사용한다.
+const numberFormat = new Intl.NumberFormat('ko-KR')
+
 /** 채워진 스키마 속성 최대 3개 → 없으면 블록 수 → 그것도 없으면 도형 종류. */
 function metaOf(feature: Feature, layer: Layer | undefined): string {
   const filled = (layer?.schema ?? [])
     .map((f) => {
       const v = feature.properties[f.key]
       if (v === undefined || v === '' || (Array.isArray(v) && !v.length)) return null
-      const shown = typeof v === 'number' ? v.toLocaleString('ko-KR') : String(v)
+      const shown = typeof v === 'number' ? numberFormat.format(v) : String(v)
       return `${shown}${f.unit ?? ''}`
     })
     .filter((v): v is string => v !== null)
@@ -65,7 +68,9 @@ export function FeatureList({
   const select = useStore((s) => s.select)
   const setDrawMode = useStore((s) => s.setDrawMode)
   const [sort, setSort] = useState<Sort>('recent')
-  const filters = useStore((s) => s.filters)
+  // 입력칸(FilterPanel)은 스토어 값을 바로 쓰고, 수천 행을 다시 그리는 목록은 늦춘 값을 쓴다 —
+  // 결과가 크게 바뀌는 입력에서 한 글자에 0.5~1초가 걸렸다 (2026-09-30 실측, dev).
+  const filters = useDeferredValue(useStore((s) => s.filters))
   const setFilters = useStore((s) => s.setFilters)
   const [filterOpen, setFilterOpen] = useState(false)
   // 필드도 조건도 없을 때만 막는다 — 조건이 남은 채 레이어를 다 끄면 지울 길이 없어진다 (D10).
@@ -91,7 +96,8 @@ export function FeatureList({
     return { rows: sorted, total: list.length }
   }, [features, layers, sort, filters])
 
-  const goTo = (feature: Feature) => {
+  // Row 가 memo 라서 참조를 고정한다 — 필터 입력마다 바뀌지 않은 행까지 다시 그리면 수천 행에서 입력이 끊긴다.
+  const goTo = useCallback((feature: Feature) => {
     select(feature.id)
     // 목록에서 골랐는데 작도 모드면 다음 클릭에 새 도형이 찍힌다. 선택 모드로 되돌린다.
     setDrawMode('select')
@@ -109,7 +115,7 @@ export function FeatureList({
         { padding: 64, maxZoom: 17 },
       )
     }
-  }
+  }, [map, select, setDrawMode])
 
   let lastDate = ''
 
@@ -186,7 +192,7 @@ export function FeatureList({
                 feature={feature}
                 layer={layer}
                 selected={feature.id === selectedId}
-                onSelect={() => goTo(feature)}
+                onSelect={goTo}
               />
             </div>
           )
@@ -196,7 +202,7 @@ export function FeatureList({
   )
 }
 
-function Row({
+const Row = memo(function Row({
   feature,
   layer,
   selected,
@@ -205,7 +211,7 @@ function Row({
   feature: Feature
   layer: Layer | undefined
   selected: boolean
-  onSelect: () => void
+  onSelect: (feature: Feature) => void
 }) {
   const firstPhoto = feature.blocks.find((b) => b.type === 'gallery' && b.refs?.length)?.refs?.[0]
   const thumb = useBlobUrl(firstPhoto?.id)
@@ -215,7 +221,7 @@ function Row({
 
   return (
     <button
-      onClick={onSelect}
+      onClick={() => onSelect(feature)}
       data-testid="feature-row"
       data-feature-id={feature.id}
       className={`mb-1.5 flex w-full items-center gap-2.5 rounded-xl p-2 text-left transition-colors ${
@@ -247,4 +253,4 @@ function Row({
       <span className="shrink-0 text-[11px] text-ink-mut">›</span>
     </button>
   )
-}
+})

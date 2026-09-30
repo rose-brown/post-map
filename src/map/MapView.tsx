@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Map as MapLibreMap,
   NavigationControl,
@@ -36,6 +36,7 @@ import { uid, type Feature } from '../types'
 import { ringLabelPoints } from './rings'
 import { hasMarker, markerById, markerImageId, pinSvg } from './markers'
 import { DOT_RADIUS, dotRadius, pinScale, pointSizeRatios } from './pointSize'
+import { activeFilter, matches } from '../filter'
 
 setWorkerUrl(maplibreWorkerUrl)
 
@@ -109,6 +110,9 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
   const selectedId = useStore((s) => s.selectedId)
   // 레이어 sizeField 로 정한 포인트 크기 비율. 셀렉터 밖에서 파생한다 (CLAUDE.md 함정: 셀렉터 안 파생 금지).
   const sizeRatios = useMemo(() => pointSizeRatios(features, layers), [features, layers])
+  // 목록과 같은 활성 조건. 셀렉터 밖에서 파생하고, 입력 반응을 막지 않게 늦춘 값을 쓴다 (FeatureList 와 같은 이유).
+  const filters = useDeferredValue(useStore((s) => s.filters))
+  const activeConditions = useMemo(() => activeFilter(filters, layers), [filters, layers])
 
   /* ---------------- 지도 생성 ---------------- */
   useEffect(() => {
@@ -356,13 +360,21 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
 
      숨긴 레이어의 도형은 Terra Draw 에 올리지 않는다(켜면 다시 채운다). 투명하게만 두면 점이 남고
      클릭도 잡혔다. 추가·제거는 배치 한 번이라 3,950 도형에서도 빠르다 — 도형마다
-     updateFeatureProperties 를 부르면 호출마다 전체를 다시 그려 13초가 걸렸다 (2026-09-29 실측). */
+     updateFeatureProperties 를 부르면 호출마다 전체를 다시 그려 13초가 걸렸다 (2026-09-29 실측).
+     필터(src/filter.ts)도 같은 추가·제거 경로를 쓴다 — 선택이 바뀔 때마다 이 이펙트가 돈다. */
   useEffect(() => {
     const draw = drawRef.current
     if (!mapReady || !draw || !ready) return
 
     const hidden = new Set(layers.filter((l) => !l.visible).map((l) => l.id))
-    const drawable = features.filter((f) => !f.derivedFrom && !hidden.has(f.layerId))
+    // 필터에 걸린 도형은 숨긴 레이어와 같은 경로로 빠진다. 선택된 도형은 필터만 건너뛴다 (스펙 D7) —
+    // 없으면 필터 중 새로 찍은 점이 finish → select 직후 이 이펙트에 지워진다. 레이어 숨김은 건너뛰지 않는다.
+    const drawable = features.filter(
+      (f) =>
+        !f.derivedFrom &&
+        !hidden.has(f.layerId) &&
+        (f.id === selectedId || matches(f, activeConditions)),
+    )
     const storeIds = new Set(drawable.map((f) => f.id))
     const colorOf = new Map(layers.map((l) => [l.id, l.style.color]))
     const radiusOf = new Map(layers.map((l) => [l.id, l.style.pointRadius]))
@@ -390,7 +402,7 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
       if (present.length) draw.removeFeatures(present)
       orphans.forEach((id) => syncedIds.current.delete(id))
     }
-  }, [mapReady, ready, features, layers, sizeRatios])
+  }, [mapReady, ready, features, layers, sizeRatios, activeConditions, selectedId])
 
   /* ---------------- 배경지도 ---------------- */
   useEffect(() => {
@@ -495,7 +507,8 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
         f.geometry.type === 'Point' &&
         !f.derivedFrom &&
         hasMarker(f.properties.icon) &&
-        layerOf(f.layerId)?.visible !== false,
+        layerOf(f.layerId)?.visible !== false &&
+        (f.id === selectedId || matches(f, activeConditions)),
     )
 
     const run = async () => {
@@ -532,7 +545,7 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
     return () => {
       cancelled = true
     }
-  }, [features, layers, mapReady, sizeRatios])
+  }, [features, layers, mapReady, sizeRatios, activeConditions, selectedId])
 
   /* ---------------- 아이콘·색 반영 ---------------- */
   // 스타일 콜백은 Terra Draw 가 들고 있는 properties 를 본다. 스토어만 고치면 다시 칠해지지 않는다.
