@@ -25,7 +25,7 @@
 | E5 | 버튼 값·라벨 표 (8절)는 **`scripts/presets/presets.ts` 하나**에 둔다. `scripts/presets/run.ts <projectId>` 가 프로젝트 모든 레이어 스키마에서 key 가 맞는 필드에 `presets` 를 **덮어쓴다** (다른 속성은 유지) | lead50 `mergeSchema` 는 기존 필드 객체를 통째로 유지해서(D7) SCHEMA 에 넣기만 하면 기존 레이어에 안 들어간다. 사본 레이어(TOP9·진입가·교통)도 key 로 같이 맞는다. 앱에 프리셋 편집 UI 가 없으므로 스크립트가 소유 |
 | E6 | `lead50/run.ts` 끝에서 presets 동기화를 부른다(top9·price 다음). transit 은 수동 실행이라 문서에 "transit 뒤 presets 도 다시" 를 남긴다 | 새로 만든 레이어에도 버튼이 들어가게 |
 | E7 | `entryPrice` = 진입가(평형별 최신 거래 중 최저, 기존 `entryGroup`)를 **억, 소수 둘째 자리** (`Math.round(만원/100)/100`). 스키마 `{ key:'entryPrice', label:'진입가 금액', type:'number', unit:'억' }`, SCHEMA 에서 `entryTrade` 바로 뒤 | 버튼 경계(3·5·6.5·8·12억)가 기존 진입가 구간 레이어(D13)와 같아야 한다 — 억 둘째 자리면 6.5억 경계가 틀어지지 않는다 |
-| E8 | `ageYears` = `준공년월`(YYYYMM)부터 `baseMonth`(YYYYMM)까지 **만 연수** (`floor(개월/12)`). 형식이 아니면 키 없음. 스키마 `{ key:'ageYears', label:'입주년차', type:'number', unit:'년' }`, `completion` 바로 뒤 | 오늘 날짜가 아니라 데이터 기준월로 재야 월 1회 갱신과 맞는다. 형식은 구현 때 실데이터로 확인 |
+| E8 | `ageYears` = `completion` 문자열의 **`(N년차)` 의 N** (KB 가 준 년차 그대로). 형식이 아니면 키 없음. 스키마 `{ key:'ageYears', label:'입주년차', type:'number', unit:'년차' }`, `completion` 바로 뒤 | 실데이터(2026-09-30, 3,288 전부)가 `"03년 08월 (24년차)"` 형식이다 — YYYYMM 이 아니다. KB 가 기준월로 이미 센 값이라 정보 페이지 준공 문자열과 숫자가 어긋나지 않는다 |
 | E9 | `entryPrice`·`ageYears` 계산은 **`price.ts` 의 `priceRows`** 가 원본을 다시 쓸 때 같이 한다 (KB·국토부 호출 없음). 진입가 사본도 원본 속성을 그대로 가져가므로 같이 갱신된다 | 이미 거래 블록으로 원본을 다시 쓰는 유일한 경로. TOP9·교통 사본은 각 스크립트를 다시 돌려야 새 속성이 붙는다 (필터 용도는 원본 6개라 막지 않는다) |
 | E10 | 처음 보이는 버튼 묶음은 **스키마 순서상 첫 3개**, 나머지는 `▾ 더보기 (N)`. 펼침 상태는 컴포넌트 로컬 | 순서 = 진입가 금액 · 총세대수 · 입주년차 (SCHEMA 순서) → 사용자가 모바일 목업에서 본 것과 같은 규모 |
 | E11 | 기존 조건 편집 행(필드·연산자·값)은 `직접 입력 ›` 을 누르면 편다. 조건이 버튼으로 표현되지 않는 것(값이 프리셋과 다름·프리셋 없는 필드·적용 안 됨)이 하나라도 있으면 처음부터 펼친다 | 버튼으로 안 보이는 조건이 숨으면 "왜 걸러지지?" 가 된다 |
@@ -71,19 +71,19 @@ export function hasManualConds(conds: FilterCond[], visibleFields: PropertySchem
 |---|---|
 | `scripts/presets/presets.ts` (새) | 8절 표. `withPresets(schema: PropertySchemaField[]): PropertySchemaField[]` — key 가 표에 있는 필드에 `presets` 덮어쓰기, 나머지 그대로 (순수) |
 | `scripts/presets/run.ts` (새) | `syncPresets(sb, projectId, dryRun)` — 레이어 전부 읽어 스키마가 바뀐 것만 PATCH. CLI `node scripts/presets/run.ts <projectId> [--dry-run]` |
-| `scripts/lead50/build.ts` | SCHEMA 에 `entryPrice`·`ageYears`, 순수 함수 `entryPriceOf(g)`·`ageYearsOf(completion, baseMonth)`, `priceRows` 가 두 속성도 채운다 (값이 없으면 키 삭제) |
+| `scripts/lead50/build.ts` | SCHEMA 에 `entryPrice`·`ageYears`, 순수 함수 `entryPriceOf(g)`·`ageYearsOf(completion)`, `priceRows` 가 두 속성도 채운다 (값이 없으면 키 삭제) |
 | `scripts/lead50/run.ts` | 끝에서 `syncPresets` 호출 (E6) |
 
 ## 4. 오류 처리
 
-- `ageYearsOf`: `준공년월`·`baseMonth` 가 6자리 숫자가 아니거나 준공이 기준월보다 뒤면 undefined → 키를 넣지 않는다 (PRD 4.3).
+- `ageYearsOf`: `completion` 에 `(N년차)` 가 없으면 undefined → 키를 넣지 않는다 (PRD 4.3).
 - `syncPresets`: 레이어 PATCH 실패 시 즉시 종료 코드 1 (다른 스크립트와 같음). `--dry-run` 은 바뀔 레이어 이름·필드 수만 출력.
 - 프리셋 값이 필드 타입과 안 맞는 경우(표 오류)는 `activeConds` 가 이미 거른다 — 버튼을 눌러도 조건이 "적용 안 됨"으로 보인다.
 
 ## 5. 테스트
 
 - `tests/filter.test.ts`: `presetFields`(보이는 레이어·presets 있는 number 만·순서), `presetOn`(between 배열 비교 포함), `togglePreset`(다른 key 보존·같은 key 여러 개 제거·켜진 것 끄기), `hasManualConds`.
-- `tests/lead50.test.ts`: `entryPriceOf`(6.85억 → 6.85, 9,500만 → 0.95), `ageYearsOf`(201803·202608 → 8, 202609·202608 → undefined, 형식 아님 → undefined), `priceRows` 가 두 속성을 채움, `SCHEMA` 순서.
+- `tests/lead50.test.ts`: `entryPriceOf`(6.85억 → 6.85, 9,500만 → 0.95), `ageYearsOf`(`"03년 08월 (24년차)"` → 24, `"26년 01월 (1년차)"` → 1, 형식 아님·undefined → undefined), `priceRows` 가 두 속성을 채움, `SCHEMA` 순서.
 - `tests/presets.test.ts`: `withPresets` 가 key 맞는 필드만 덮어쓰고 label·unit 등 사용자 변경 유지, 표의 모든 op 가 `opsFor('number')` 안.
 - 브라우저 (dev, 1280×800 · 390×844): 버튼 → 개수가 직접 입력 같은 조건과 같음, 켜진 버튼 다시 → 해제, 더보기, 직접 입력 자동 펼침(E11), 모바일 시트 접힘에서 지도·필터 유지, PC 우측 패널 접기·점·선택 시 자동 펼침·지도 폭 따라감.
 - 실데이터: `node scripts/lead50/price.ts <id> --dry-run` → 실행, `node scripts/presets/run.ts <id> --dry-run` → 실행. 진입가 버튼 개수가 진입가 구간 레이어 개수(468/634/444/329/523/810)의 누적과 맞는지 대조 — 구간 레이어는 `[하한, 상한)` 이고 버튼은 `이하`(경계 포함)라 경계값(정확히 3억 등) 단지 수만큼 차이 날 수 있다. 그 수를 따로 세어 설명되면 통과.
@@ -105,7 +105,7 @@ export function hasManualConds(conds: FilterCond[], visibleFields: PropertySchem
 |---|---|
 | `entryPrice` (억) | 3억 이하 `lte 3` · 5억 이하 `lte 5` · 6.5억 이하 `lte 6.5` · 8억 이하 `lte 8` · 12억 이하 `lte 12` · 12억~ `gte 12` |
 | `households` (세대) | 300~ `gte 300` · 500~ · 1000~ · 2000~ · 3000~ |
-| `ageYears` (년) | ~5년 `lte 5` · ~10년 · ~15년 · ~20년 · 20년~ `gte 20` · 30년~ `gte 30` |
-| `pricePerPyeong` (만원) | ~2천 `lte 2000` · ~3천 · ~4천 · ~6천 · 6천~ `gte 6000` (구현 때 분포를 보고 경계만 조정 가능 — 조정하면 이 표를 고친다) |
+| `ageYears` (년차) | ~5년 `lte 5` · ~10년 · ~15년 · ~20년 · 20년~ `gte 20` · 30년~ `gte 30` |
+| `pricePerPyeong` (만원) | ~1천 `lte 1000` · ~2천 · ~3천 · ~4천 · ~6천 · 6천~ `gte 6000` (분포 2026-09-30: 중앙 2,357 · 상위25% 4,037 · 상위10% 6,010) |
 | `stationDistance` (m) | 300m 이내 `lte 300` · 500m · 800m · 1km `lte 1000` |
 | `minSeolleung`·`minYeouido`·`minCityHall` (분) | 20분 `lte 20` · 30분 · 45분 · 1시간 `lte 60` |
