@@ -16,6 +16,8 @@ export interface FilterCond {
   op: FilterOp
   /** 입력칸 문자열. between 은 [최소, 최대] */
   value: string | [string, string]
+  /** 버튼으로 만든 조건. 같은 key 의 버튼 조건끼리는 OR (여러 구간을 함께 켠다, 2026-09-30 사용자 요청) */
+  preset?: true
 }
 
 export function opsFor(type: PropertyType): FilterOp[] {
@@ -107,9 +109,23 @@ function matchOne(feature: Feature, c: FilterCond): boolean {
   return c.op === 'gte' ? n >= t : n <= t
 }
 
-/** 모든 조건 AND. conds 는 activeConds 를 거친 것이어야 한다. 키가 없으면 false (D3). */
+/**
+ * 직접 입력 조건은 모두 AND, 버튼 조건은 key 마다 OR 로 묶은 뒤 AND. conds 는 activeConds 를 거친 것이어야 한다.
+ * 키가 없으면 false (D3).
+ */
 export function matches(feature: Feature, conds: FilterCond[]): boolean {
-  return conds.every((c) => matchOne(feature, c))
+  const presetGroups = new Map<string, FilterCond[]>()
+  for (const c of conds) {
+    if (!c.preset) {
+      if (!matchOne(feature, c)) return false
+      continue
+    }
+    const g = presetGroups.get(c.key)
+    if (g) g.push(c)
+    else presetGroups.set(c.key, [c])
+  }
+  for (const g of presetGroups.values()) if (!g.some((c) => matchOne(feature, c))) return false
+  return true
 }
 
 /** 버튼 묶음을 그릴 필드: 보이는 레이어의 presets 있는 number 필드 (filterFields 순서 = 스키마 순서, E10). */
@@ -125,12 +141,15 @@ export function presetOn(conds: FilterCond[], key: string, p: FilterPreset): boo
   return conds.some((c) => c.key === key && c.op === p.op && sameValue(c.value, p.value))
 }
 
-/** E4. 켜져 있으면 그 key 조건을 모두 빼고, 아니면 그 key 조건을 모두 지운 뒤 버튼 조건 하나를 넣는다. */
+/**
+ * 켜져 있으면 그 버튼 조건만 뺀다. 아니면 버튼 조건을 더한다 — 같은 key 의 다른 버튼은 두고(OR 로 넓어진다),
+ * 같은 key 의 직접 입력 조건은 지운다 (AND 인 직접 입력과 OR 인 버튼이 섞이면 결과를 읽기 어렵다).
+ */
 export function togglePreset(conds: FilterCond[], key: string, p: FilterPreset, id: string): FilterCond[] {
-  const rest = conds.filter((c) => c.key !== key)
-  if (presetOn(conds, key, p)) return rest
+  const same = (c: FilterCond) => c.key === key && c.op === p.op && sameValue(c.value, p.value)
+  if (conds.some(same)) return conds.filter((c) => !same(c))
   const value: FilterCond['value'] = Array.isArray(p.value) ? [p.value[0], p.value[1]] : p.value
-  return [...rest, { id, key, op: p.op, value }]
+  return [...conds.filter((c) => c.key !== key || c.preset), { id, key, op: p.op, value, preset: true }]
 }
 
 /** E11. 버튼으로 보이지 않는 조건(프리셋 없는 필드·버튼과 다른 값·적용 안 됨·입력 중)이 있나 — 있으면 직접 입력을 펼쳐 둔다. */

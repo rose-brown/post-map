@@ -172,3 +172,33 @@ test('shownPresetGroups: 처음 3개 + 조건이 걸린 묶음은 접어도 보�
   assert.deepEqual(shownPresetGroups(g, [c('e', 'gte', '1')], false).map((f) => f.key), ['a', 'b', 'c', 'e'])
   assert.deepEqual(shownPresetGroups(g, [], true).map((f) => f.key), ['a', 'b', 'c', 'd', 'e'])
 })
+
+const pc = (key: string, op: FilterCond['op'], value: FilterCond['value']): FilterCond => ({ ...c(key, op, value), id: `${key}${op}${value}`, preset: true })
+
+test('matches: 같은 key 의 버튼 조건은 OR, 다른 key·직접 입력은 AND', () => {
+  const r35 = pc('e', 'between', ['3', '4.99']), r565 = pc('e', 'between', ['5', '6.49'])
+  assert.equal(matches(feat({ e: 4 }), [r35, r565]), true)
+  assert.equal(matches(feat({ e: 6 }), [r35, r565]), true)
+  assert.equal(matches(feat({ e: 7 }), [r35, r565]), false)
+  const h = pc('h', 'between', ['1000', '1999'])
+  assert.equal(matches(feat({ e: 6, h: 1500 }), [r35, r565, h]), true)
+  assert.equal(matches(feat({ e: 6, h: 2500 }), [r35, r565, h]), false)
+  // 직접 입력 두 개는 AND (범위)
+  assert.equal(matches(feat({ h: 1500 }), [c('h', 'gte', '1000'), c('h', 'lte', '1200')]), false)
+})
+
+test('togglePreset: 같은 key 에서 여러 버튼을 켜고 하나씩 끈다', () => {
+  const a = pre('3~5억', 'between', ['3', '4.99']), b = pre('5~6.5억', 'between', ['5', '6.49'])
+  let conds = togglePreset([], 'e', a, 'id1')
+  conds = togglePreset(conds, 'e', b, 'id2')
+  assert.deepEqual(conds.map((x) => [x.id, x.preset]), [['id1', true], ['id2', true]])
+  assert.equal(presetOn(conds, 'e', a) && presetOn(conds, 'e', b), true)
+  conds = togglePreset(conds, 'e', a, 'id3')
+  assert.deepEqual(conds.map((x) => x.id), ['id2'])
+})
+
+test('togglePreset: 버튼을 켜면 같은 key 의 직접 입력 조건만 지운다', () => {
+  const conds = [c('e', 'gte', '2'), pc('e', 'between', ['3', '4.99']), c('s', 'lte', '800')]
+  const next = togglePreset(conds, 'e', pre('5~6.5억', 'between', ['5', '6.49']), 'n')
+  assert.deepEqual(next.map((x) => [x.key, x.op, x.preset ?? false]), [['e', 'between', true], ['s', 'lte', false], ['e', 'between', true]])
+})

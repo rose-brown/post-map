@@ -567,8 +567,12 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
   /* ---------------- 선택 동기화 ---------------- */
   useEffect(() => {
     const draw = drawRef.current
-    if (!draw || !selectedId) return
-    if (draw.getMode() !== 'select') return
+    if (!draw || draw.getMode() !== 'select') return
+    // 스토어 선택이 풀리면(정보 페이지 '목록으로' 등) Terra Draw 선택도 푼다. 안 풀면 TD 는 그 도형을
+    // 선택된 채로 들고 있어서, 같은 점을 다시 눌러도 select 이벤트가 오지 않아 정보 페이지가 열리지 않았다.
+    const stale = draw.getSnapshot().filter((f) => f.properties.selected && f.id !== selectedId)
+    stale.forEach((f) => draw.deselectFeature(f.id as string))
+    if (!selectedId) return
     if (draw.hasFeature(selectedId)) {
       try {
         draw.selectFeature(selectedId)

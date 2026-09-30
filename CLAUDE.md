@@ -168,6 +168,7 @@ Phase 1 구현 중 실제로 시간을 잡아먹은 것들이다. 같은 것을 
 - **Terra Draw select 모드의 `flags` 는 모드 이름으로 키를 잡는다** (`polygon`, `linestring`, …).
   꼭짓점 편집은 `flags[mode].feature.coordinates.draggable`.
 - **HTML5 drag-and-drop 을 쓰지 마라** — 터치에서 동작하지 않는다. 블록 순서 변경은 포인터 이벤트로 구현돼 있다.
+- **스토어 선택을 풀 때 Terra Draw 선택도 풀어야 한다.** 안 풀면 TD 가 그 도형을 선택된 채로 들고 있어 같은 점을 다시 눌러도 `select` 이벤트가 오지 않았다 — 정보 페이지가 안 열렸다 (`MapView` 선택 동기화 이펙트, 2026-09-30).
 - **스토어에서 도형을 지울 때 Terra Draw 에도 알려야 한다.** 스토어·서버만 고치면
   도형이 지도에 계속 그려져서 "삭제가 안 된다"로 보인다. 지금은 동기화 이펙트가 양방향이라
   (`syncedIds` 기준으로 고아 제거) 정보 페이지 삭제·레이어 삭제·cascade 가 모두 덮인다.
@@ -267,4 +268,5 @@ Design Compiler 목업(`<x-dc>` + `text/x-dc` 스크립트)이다. **실행 가�
   지도에서는 선택 도형이 예외, 동심원은 거르지 않는다. 스펙 `docs/superpowers/specs/2026-09-30-list-filter-design.md`.
   목록은 수천 행이라 `Row` 는 `memo`, 필터는 `useDeferredValue` 로 늦춰 쓴다 — 빼면 한 글자에 1초 넘게 걸린다.
   버튼 묶음은 스키마 필드 `presets`(스크립트 소유, `scripts/presets/presets.ts`)로 그린다 — 앱은 편집하지 않는다. 스펙 `2026-09-30-filter-buttons-design.md`.
+  버튼 조건(`preset: true`)은 같은 key 끼리 OR, 나머지는 AND (`matches`).
   **테이블 뷰**(F-70·72~75)는 여전히 Phase 2 다.

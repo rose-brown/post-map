@@ -43,8 +43,15 @@ export function FilterPanel({ embedded }: { embedded: boolean }) {
   const ctl = embedded ? 'touch-target text-[16px]' : 'h-8 text-[12px]'
   const input = `${ctl} min-w-0 rounded-lg border border-line bg-surface px-2`
 
+  // 직접 입력에서 고친 조건은 더 이상 버튼 조건이 아니다 — preset 표시를 떼서 AND 로 돌린다.
   const update = (id: string, patch: Partial<FilterCond>) =>
-    setFilters(filters.map((c) => (c.id === id ? { ...c, ...patch } : c)))
+    setFilters(
+      filters.map((c) => {
+        if (c.id !== id) return c
+        const { preset: _preset, ...rest } = c
+        return { ...rest, ...patch }
+      }),
+    )
 
   const changeField = (cond: FilterCond, key: string) => {
     const next = fieldOf(key)

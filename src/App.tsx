@@ -148,8 +148,9 @@ export function App() {
   }
 
   /* ---------------- PC: 좌 레이어 / 중앙 지도 / 우 정보 페이지 ---------------- */
+  // 창이 작아도 지도가 찌그러지지 않게 최소 크기를 둔다 — 넘치면 페이지에 가로·세로 스크롤이 생겨 우측 패널까지 밀어 볼 수 있다.
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-[600px] min-w-[1100px] flex-col">
       <TopBar map={map} />
 
       <div className="flex min-h-0 flex-1">
