@@ -12,6 +12,7 @@ import {
   type PropertySchemaField,
 } from '../types'
 import { userInput } from '../persist/persistable'
+import type { FilterCond } from '../filter'
 import {
   deleteFeatures,
   deleteLayer,
@@ -66,11 +67,14 @@ interface State {
   basemapId: string
   /** 저장되지 않는 표시 전용 주소. 제공자 약관 미확인이라 저장 경로로 보내지 않는다. */
   addressHints: Record<string, string>
+  /** 목록·지도 필터 조건 (스펙 2026-09-30 D1). 저장하지 않는다 — 새로고침하면 사라진다. */
+  filters: FilterCond[]
 
   init(projectId: string): Promise<void>
   setDrawMode(m: DrawMode): void
   setBasemap(id: string): void
   select(id: string | null): void
+  setFilters(filters: FilterCond[]): void
 
   addLayer(name?: string): void
   updateLayer(id: string, patch: Partial<Layer>): void
@@ -112,6 +116,7 @@ export const useStore = create<State>((set, get) => ({
   drawMode: 'select',
   basemapId: 'Base',
   addressHints: {},
+  filters: [],
 
   async init(projectId: string) {
     if (initPromise) return initPromise
@@ -140,6 +145,7 @@ export const useStore = create<State>((set, get) => ({
   setDrawMode: (drawMode) => set({ drawMode }),
   setBasemap: (basemapId) => set({ basemapId }),
   select: (selectedId) => set({ selectedId }),
+  setFilters: (filters) => set({ filters }),
 
   addLayer(name) {
     const { project, layers } = get()

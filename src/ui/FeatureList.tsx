@@ -6,6 +6,8 @@ import type { Feature, Layer } from '../types'
 import { useBlobUrl } from './Blocks'
 import { MarkerGlyph } from './MarkerPicker'
 import { hasMarker, markerById } from '../map/markers'
+import { activeFilter, filterFields, matches } from '../filter'
+import { FilterPanel } from './FilterBar'
 
 /**
  * 우측 패널의 기본 화면. 목업(.dc.html)의 "목록 ↔ 정보 페이지" 전환 구조를 계승한다.
@@ -63,19 +65,31 @@ export function FeatureList({
   const select = useStore((s) => s.select)
   const setDrawMode = useStore((s) => s.setDrawMode)
   const [sort, setSort] = useState<Sort>('recent')
+  const filters = useStore((s) => s.filters)
+  const setFilters = useStore((s) => s.setFilters)
+  const [filterOpen, setFilterOpen] = useState(false)
+  // 필드도 조건도 없을 때만 막는다 — 조건이 남은 채 레이어를 다 끄면 지울 길이 없어진다 (D10).
+  const canFilter = useMemo(
+    () => filters.length > 0 || filterFields(layers, { visibleOnly: true }).length > 0,
+    [filters, layers],
+  )
 
   const layerById = useMemo(() => new Map(layers.map((l) => [l.id, l])), [layers])
 
-  const rows = useMemo(() => {
+  const { rows, total } = useMemo(() => {
     // 동심원 링은 파생 도형이라 목록에 넣지 않는다. 숨긴 레이어의 도형도 뺀다.
     const visible = new Set(layers.filter((l) => l.visible).map((l) => l.id))
     const list = features.filter((f) => !f.derivedFrom && visible.has(f.layerId))
-    return [...list].sort((a, b) =>
+    // 목록에는 선택 예외가 없다 — 선택 중엔 목록 대신 정보 페이지가 뜬다 (D7).
+    const active = activeFilter(filters, layers)
+    const passed = active.length ? list.filter((f) => matches(f, active)) : list
+    const sorted = [...passed].sort((a, b) =>
       sort === 'title'
         ? (a.title || '제목 없음').localeCompare(b.title || '제목 없음', 'ko')
         : b.createdAt.localeCompare(a.createdAt),
     )
-  }, [features, layers, sort])
+    return { rows: sorted, total: list.length }
+  }, [features, layers, sort, filters])
 
   const goTo = (feature: Feature) => {
     select(feature.id)
@@ -104,9 +118,20 @@ export function FeatureList({
       <div className="flex flex-none items-center gap-2 border-b border-line px-4 py-3">
         {!embedded && <span className="text-sm font-semibold">기록</span>}
         <span className="text-xs font-medium text-brand" data-testid="feature-count">
-          {rows.length}
+          {filters.length ? `${rows.length.toLocaleString('ko-KR')} / ${total.toLocaleString('ko-KR')}` : rows.length}
         </span>
         <div className="flex-1" />
+        <button
+          onClick={() => setFilterOpen((v) => !v)}
+          disabled={!canFilter}
+          aria-pressed={filterOpen}
+          data-testid="filter-toggle"
+          className={`rounded-full px-2.5 py-1 text-[11px] font-medium disabled:opacity-40 ${
+            embedded ? 'touch-target' : ''
+          } ${filters.length ? 'bg-brand text-white' : 'border border-line text-ink-mut'}`}
+        >
+          필터{filters.length ? ` ${filters.length}` : ''}
+        </button>
         {(
           [
             ['recent', '최근순'],
@@ -127,8 +152,18 @@ export function FeatureList({
         ))}
       </div>
 
+      {filterOpen && <FilterPanel embedded={embedded} />}
+
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-        {!rows.length && (
+        {!rows.length && total > 0 && filters.length > 0 && (
+          <div className="flex flex-col items-start gap-1.5 py-6" data-testid="filter-empty">
+            <span className="text-[14px] font-semibold">조건에 맞는 도형이 없습니다</span>
+            <button onClick={() => setFilters([])} className="text-[12px] font-medium text-brand">
+              필터 지우기
+            </button>
+          </div>
+        )}
+        {!rows.length && total === 0 && (
           <div className="flex flex-col gap-1.5 py-6">
             <span className="text-[14px] font-semibold">아직 기록이 없습니다</span>
             <span className="text-[12px] leading-relaxed text-ink-mut">
