@@ -183,6 +183,22 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
           'symbol-sort-key': ['coalesce', ['get', 'order'], 0],
         },
       })
+      // 포인트 제목. 겹치면 MapLibre 가 솎아낸다 — 위에 그려지는 레이어(order 큰 쪽)의 이름을 먼저 둔다.
+      map.addSource('pointLabels', { type: 'geojson', data: EMPTY })
+      map.addLayer({
+        id: 'point-labels',
+        type: 'symbol',
+        source: 'pointLabels',
+        layout: {
+          'text-field': ['get', 'title'],
+          'text-font': ['Noto Sans Regular'],
+          'text-size': 11,
+          'text-anchor': 'top',
+          'text-offset': [0, 0.6],
+          'symbol-sort-key': ['-', 0, ['coalesce', ['get', 'order'], 0]],
+        },
+        paint: { 'text-color': '#1a1c1f', 'text-halo-color': '#fff', 'text-halo-width': 2 },
+      })
 
       update()
       onMapReady?.(map)
@@ -546,6 +562,33 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
       cancelled = true
     }
   }, [features, layers, mapReady, sizeRatios, activeConditions, selectedId])
+
+  /* ---------------- 포인트 제목 ---------------- */
+  // 아이콘 유무와 관계없이 보이는 점에 붙인다. 거르는 조건은 아이콘 소스와 같다.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) return
+    const source = map.getSource('pointLabels') as GeoJSONSource | undefined
+    if (!source) return
+    const layerOf = (id: string) => layers.find((l) => l.id === id)
+    source.setData({
+      type: 'FeatureCollection',
+      features: features
+        .filter(
+          (f) =>
+            f.geometry.type === 'Point' &&
+            !f.derivedFrom &&
+            !!f.title &&
+            layerOf(f.layerId)?.visible !== false &&
+            (f.id === selectedId || matches(f, activeConditions)),
+        )
+        .map((f) => ({
+          type: 'Feature' as const,
+          geometry: f.geometry,
+          properties: { title: f.title, order: layerOf(f.layerId)?.order ?? 0 },
+        })),
+    })
+  }, [features, layers, mapReady, activeConditions, selectedId])
 
   /* ---------------- 아이콘·색 반영 ---------------- */
   // 스타일 콜백은 Terra Draw 가 들고 있는 properties 를 본다. 스토어만 고치면 다시 칠해지지 않는다.
