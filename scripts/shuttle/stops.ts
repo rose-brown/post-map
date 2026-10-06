@@ -16,6 +16,8 @@ export interface Stop {
   feature?: string
   layerPrefix?: string
   address?: string
+  /** 지오코더로 못 찾는 곳만 — 출처의 좌표 [lng, lat] */
+  point?: [number, number]
 }
 
 export interface StopGroup { layer: string; color: string; idPrefix: string; campus: string; stops: Stop[] }
@@ -55,7 +57,13 @@ const SUWON: Stop[] = [
   { title: '동탄역반도유보라아이비파크5.0', route: '동탄', address: '경기도 화성시 동탄구 동탄기흥로 393-15', source: CREDIT, note: '기사(2026-04-20): 하이닉스 이천·삼성 화성·수원 셔틀 3개 노선이 교차' },
 ]
 
+const PYEONGTAEK: Stop[] = [
+  { title: '평택지제역', route: '지제', feature: '평택지제', layerPrefix: 'lyr_line_01', source: 'https://shuttle-go.com/page/pyeongtaek-jije-station-samsung-electronics-pyeongtaek-morning-shuttle/', note: '셔틀Go "평택지제역 → 삼성전자 평택 반도체 사업장 출근 버스". 정류장 위치는 역으로 갈음' },
+  { title: '동탄역', route: '동탄', point: [127.095111, 37.201167], source: 'https://shuttle-go.com/page/samsung-electronics-pyeongtaek-dongtan-station-evening-shuttle/', note: '셔틀Go "평택 사업장 → 동탄역 퇴근 버스". 좌표는 위키백과 Dongtan station (VWorld 검색·지오코딩 실패)' },
+]
+
 export const GROUPS: StopGroup[] = [
   { layer: 'SK하이닉스 이천 셔틀 탑승지 (비공식)', color: '#ea580c', idPrefix: 'hx', campus: 'SK하이닉스 이천캠퍼스', stops: HYNIX },
   { layer: '삼성전자 수원 셔틀 탑승지 (비공식)', color: '#1d4ed8', idPrefix: 'sw', campus: '삼성전자 수원 디지털시티', stops: SUWON },
+  { layer: '삼성전자 평택 셔틀 탑승지 (비공식)', color: '#0891b2', idPrefix: 'pt', campus: '삼성전자 평택캠퍼스', stops: PYEONGTAEK },
 ]

@@ -46,7 +46,8 @@ const dryRun = process.argv.includes('--dry-run')
 const sb = supabaseClient(projectId)
 const layers = await readLayers(sb, projectId)
 
-async function locate(s: Pick<Stop, 'feature' | 'layerPrefix' | 'address'>): Promise<[number, number] | null> {
+async function locate(s: Pick<Stop, 'feature' | 'layerPrefix' | 'address' | 'point'>): Promise<[number, number] | null> {
+  if (s.point) return s.point
   if (s.address) return geocode(s.address, key!)
   const rows = (await sb(`features?project_id=eq.${projectId}&derived_from=is.null&title=eq.${encodeURIComponent(s.feature!)}&select=layer_id,geometry`)) as Pick<FeatureRow, 'layer_id' | 'geometry'>[]
   for (const r of rows) {
@@ -91,7 +92,7 @@ for (const g of GROUPS) {
   const byRoute = new Map<string, { title: string; point: [number, number] }[]>()
   for (const s of g.stops) {
     const point = await locate(s)
-    console.log(`${point ? 'OK ' : 'XX '} ${s.title} ← ${s.address ?? s.feature} ${point ? `[${point}]` : '실패'}`)
+    console.log(`${point ? 'OK ' : 'XX '} ${s.title} ← ${s.address ?? s.feature ?? "좌표 지정"} ${point ? `[${point}]` : '실패'}`)
     if (!point) { failed.push(`${g.layer} ${s.title}`); continue }
     const id = `ftr_shuttle_${g.idPrefix}_${createHash('sha1').update(s.title).digest('hex').slice(0, 10)}`
     const prev = old.find((f) => f.id === id)
