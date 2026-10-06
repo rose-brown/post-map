@@ -43,11 +43,33 @@ export const TRADES_BLOCK_ID = 'blk_lead50_trades'
 export const STAR_RANK = 10
 const STAR_ICON = 'star'
 
+/**
+ * 면적 구간별 진입가 — 그 구간 평형의 최신 거래 중 최저 (사용자 결정 2026-10-04: "40㎡ 이상 집을 얼마부터 사나").
+ * 경계는 정수 ㎡(summarizeTrades 가 반올림) [lo, hi). 거래가 몰린 59·60㎡, 84·85㎡ 가 구간 시작이 되게 잘랐다.
+ */
+export const AREA_BANDS = [
+  { key: 'entryPriceUnder40', label: '진입가 ~40㎡', lo: 0, hi: 40 },
+  { key: 'entryPrice40', label: '진입가 40~59㎡', lo: 40, hi: 59 },
+  { key: 'entryPrice59', label: '진입가 59~84㎡', lo: 59, hi: 84 },
+  { key: 'entryPrice84', label: '진입가 84㎡~', lo: 84, hi: Infinity },
+] as const
+
+/** 구간에 평형이 없으면 키가 없다. */
+export function areaEntryPrices(groups: AreaGroup[]): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const b of AREA_BANDS) {
+    const v = entryPriceOf(entryGroup(groups.filter((g) => g.area >= b.lo && g.area < b.hi)))
+    if (v !== undefined) out[b.key] = v
+  }
+  return out
+}
+
 /** 스펙 4.2. 순서 = 정보 카드 표시 순서 (D9: 실거래가 맨 위). */
 export const SCHEMA: PropertySchemaField[] = [
   { key: 'recentTrade', label: '최근 매매', type: 'text' },
   { key: 'entryTrade', label: '진입가', type: 'text' },
   { key: 'entryPrice', label: '진입가 금액', type: 'number', unit: '억' },
+  ...AREA_BANDS.map((b): PropertySchemaField => ({ key: b.key, label: b.label, type: 'number', unit: '억' })),
   { key: 'rank', label: '순위', type: 'number' },
   { key: 'households', label: '총세대수', type: 'number', unit: '세대' },
   { key: 'generalHouseholds', label: '일반세대수', type: 'number', unit: '세대' },
@@ -250,6 +272,7 @@ export function buildProperties(c: Complex, groups: AreaGroup[]): Properties {
     recentTrade: recentTradeLine(groups),
     entryTrade: entryTradeLine(groups),
     entryPrice: entryPriceOf(entryGroup(groups)),
+    ...areaEntryPrices(groups),
     rank: item.rank,
     households: detail.households,
     generalHouseholds: item.generalHouseholds,
@@ -397,7 +420,7 @@ export const PRICE_LAYERS: LayerDef[] = [
 export const priceBandOf = (manwon: number): number => PRICE_CUTS.filter((c) => manwon >= c).length
 
 /** priceRows 가 쓰는 원본 키 — 이것만 비교해 바뀌었는지 본다. */
-const OWN_PRICE_KEYS = ['entryTrade', 'entryPrice', 'ageYears'] as const
+const OWN_PRICE_KEYS = ['entryTrade', 'entryPrice', 'ageYears', ...AREA_BANDS.map((b) => b.key)]
 
 function setOrDelete(p: Properties, key: string, v: number | undefined): void {
   if (v === undefined) delete p[key]
@@ -415,12 +438,15 @@ export function priceRows(source: FeatureRow[], layerIds: string[], now: string)
   for (const f of source) {
     if (f.derived_from || f.parent_id || !f.properties.kbComplexId) continue
     const block = f.blocks.find((b) => b.id === TRADES_BLOCK_ID)
-    const g = entryGroup(parseTradesBlock(block?.text ?? ''))
+    const groups = parseTradesBlock(block?.text ?? '')
+    const g = entryGroup(groups)
     const properties: Properties = { ...f.properties }
     setOrDelete(properties, 'ageYears', ageYearsOf(f.properties.completion))
     if (g) {
       properties.entryTrade = tradeLine(g)
       setOrDelete(properties, 'entryPrice', entryPriceOf(g))
+      const byArea = areaEntryPrices(groups)
+      for (const b of AREA_BANDS) setOrDelete(properties, b.key, byArea[b.key])
     }
     const same = OWN_PRICE_KEYS.every((k) => properties[k] === f.properties[k])
     const original = same ? f : { ...f, properties, updated_at: now }

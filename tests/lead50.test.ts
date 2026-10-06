@@ -5,7 +5,7 @@ import {
   recentTradeLine, tradesBlock, buildProperties, mergeSchema, mergeFeature, duplicateIds, sggCodesFor, rankIcon,
   regionPrefix, retireRows, topRows, bandOf, BAND_LAYERS,
   entryTradeLine, parsePrice, parseTradesBlock, priceBandOf, priceRows, PRICE_LAYERS,
-  ageYearsOf, entryPriceOf, entryGroup,
+  ageYearsOf, entryPriceOf, entryGroup, AREA_BANDS, areaEntryPrices,
 } from '../scripts/lead50/build.ts'
 import type { Complex, Trade } from '../scripts/lead50/build.ts'
 import type { FeatureRow } from '../src/db/mappers.ts'
@@ -380,4 +380,42 @@ test('priceRows: entryPrice·ageYears 도 쓰고, 거래 없는 단지는 입주
   const again = priceRows(originals, ['L0', 'L1', 'L2', 'L3', 'L4', 'L5'], 'later')
   assert.deepEqual(again.originals.filter((f) => f.updated_at === 'later').map((f) => f.id), [])
   assert.deepEqual(again.originals.map((f) => f.id), ['ftr_a'])
+})
+
+test('areaEntryPrices: 면적 구간별 진입가 — 정수 ㎡ 39/40, 58/59, 83/84 경계, 구간 안 최저가, 없는 구간은 키 없음', () => {
+  const groups = summarizeTrades([
+    t({ area: 39.4, price: 30000 }),                       // 39 → ~40
+    t({ area: 39.6, price: 31000 }),                       // 40 → 40~59
+    t({ area: 58.4, price: 52000 }),                       // 58 → 40~59
+    t({ area: 59.9, price: 72000 }), t({ area: 74, price: 70000 }),   // 60·74 → 59~84, 싼 쪽
+    t({ area: 83.4, price: 99000 }),                       // 83 → 59~84
+  ], '2025-10-01')
+  assert.deepEqual(areaEntryPrices(groups), { entryPriceUnder40: 3, entryPrice40: 3.1, entryPrice59: 7 })
+  assert.deepEqual(areaEntryPrices(summarizeTrades([t({ area: 84.4, price: 95000 })], '2025-10-01')), { entryPrice84: 9.5 })
+  assert.deepEqual(areaEntryPrices([]), {})
+  assert.deepEqual(AREA_BANDS.map((b) => b.label), ['진입가 ~40㎡', '진입가 40~59㎡', '진입가 59~84㎡', '진입가 84㎡~'])
+})
+
+test('SCHEMA: 면적 구간 진입가 4개는 entryPrice 바로 뒤, number·억', () => {
+  const keys = SCHEMA.map((f) => f.key)
+  const i = keys.indexOf('entryPrice')
+  assert.deepEqual(keys.slice(i + 1, i + 5), AREA_BANDS.map((b) => b.key))
+  for (const b of AREA_BANDS) assert.deepEqual(SCHEMA.find((f) => f.key === b.key), { key: b.key, label: b.label, type: 'number', unit: '억' })
+})
+
+test('buildProperties·priceRows: 면적 구간 진입가를 같이 채우고, 빠진 구간 키는 지운다', () => {
+  const groups = summarizeTrades([t({ area: 59.9, price: 72000 })], '2025-10-01')
+  const p = buildProperties(complex(), groups)
+  assert.equal(p.entryPrice59, 7.2)
+  assert.equal('entryPrice84' in p, false)
+  const f: FeatureRow = {
+    id: 'ftr_a', project_id: 'p', layer_id: 'lyr_band', parent_id: null, geometry: { type: 'Point', coordinates: [127, 37] },
+    title: '단지', properties: { kbComplexId: '1', entryPrice84: 9 }, blocks: [tradesBlock(groups)!],
+    derived_from: null, created_at: 'c', updated_at: 'u',
+  }
+  const { originals, copies } = priceRows([f], ['L0', 'L1', 'L2', 'L3', 'L4', 'L5'], 'now')
+  assert.equal(originals[0].properties.entryPrice59, 7.2)
+  assert.equal('entryPrice84' in originals[0].properties, false)
+  assert.equal(copies[0].properties.entryPrice59, 7.2)
+  assert.equal(priceRows([originals[0]], ['L0', 'L1', 'L2', 'L3', 'L4', 'L5'], 'later').originals[0].updated_at, 'now')
 })

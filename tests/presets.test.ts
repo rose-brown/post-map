@@ -19,7 +19,7 @@ test('withPresets: 표에 있는 number 필드만 presets 를 덮어쓰고 나�
 })
 
 test('PRESETS: 스펙 8절 key 전부, 연산자는 모두 number 연산자, 값은 숫자 문자열', () => {
-  assert.deepEqual(Object.keys(PRESETS).sort(), ['ageYears', 'entryPrice', 'households', 'minCityHall', 'minSeolleung', 'minYeouido', 'pricePerPyeong', 'stationDistance'])
+  assert.deepEqual(Object.keys(PRESETS).sort(), ['ageYears', 'entryPrice', 'entryPrice40', 'entryPrice59', 'entryPrice84', 'entryPriceUnder40', 'households', 'minCityHall', 'minSeolleung', 'minYeouido', 'pricePerPyeong', 'stationDistance'])
   for (const [key, list] of Object.entries(PRESETS)) {
     assert.ok(list.length >= 4, key)
     for (const p of list) {
@@ -30,6 +30,7 @@ test('PRESETS: 스펙 8절 key 전부, 연산자는 모두 number 연산자, 값
   assert.deepEqual(PRESETS.households.map((p) => p.label), ['~300', '300~500', '500~1000', '1000~2000', '2000~3000', '3000~'])
   assert.deepEqual(PRESETS.entryPrice.map((p) => p.label), ['~3억', '3~5억', '5~6.5억', '6.5~8억', '8~12억', '12억~'])
   assert.deepEqual(PRESETS.entryPrice[3], { label: '6.5~8억', op: 'between', value: ['6.5', '7.99'] })
+  for (const k of ['entryPriceUnder40', 'entryPrice40', 'entryPrice59', 'entryPrice84']) assert.deepEqual(PRESETS[k], PRESETS.entryPrice, k)
   assert.deepEqual(PRESETS.households[3], { label: '1000~2000', op: 'between', value: ['1000', '1999'] })
 })
 
