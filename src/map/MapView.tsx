@@ -350,8 +350,13 @@ export function MapView({ onMapReady }: { onMapReady?: (m: MapLibreMap) => void 
       )
       const hit = hits.find((f) => typeof f.id === 'string')
       if (!hit?.id) return
+      // 서버에서 바로 지워지고 되돌리기가 없다 — 확인을 받고, 지운 뒤에는 선택 도구로 돌아간다 (실수 삭제, 2026-10-04).
+      const state = useStore.getState()
+      const title = state.features.find((f) => f.id === hit.id)?.title
+      if (!window.confirm(`${title ? `"${title}"을(를)` : '이 도형을'} 삭제할까요?`)) return
       draw.removeFeatures([hit.id])
-      useStore.getState().removeFeature(String(hit.id))
+      state.removeFeature(String(hit.id))
+      state.setDrawMode('select')
     })
 
     // 마지막 점 되돌리기

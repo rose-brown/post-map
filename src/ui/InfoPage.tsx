@@ -293,6 +293,7 @@ export function InfoPage({
       <div className="flex flex-none items-center gap-2 border-t border-line px-4 py-3">
         <button
           onClick={() => {
+            if (!window.confirm(`${feature.title ? `"${feature.title}"을(를)` : '이 도형을'} 삭제할까요?`)) return
             removeFeature(feature.id)
             onClose()
           }}

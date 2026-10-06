@@ -114,7 +114,9 @@ export function LayerPanel() {
                 속성 스키마 {layer.schema.length > 0 && `(${layer.schema.length})`}
               </button>
               <button
-                onClick={() => removeLayer(layer.id)}
+                onClick={() => {
+                  if (window.confirm(`"${layer.name}" 레이어와 도형 ${count(layer.id)}개를 삭제할까요?`)) removeLayer(layer.id)
+                }}
                 disabled={layers.length <= 1}
                 className="shrink-0 whitespace-nowrap rounded-md px-2 py-1 text-[11px] text-danger disabled:opacity-30"
               >
