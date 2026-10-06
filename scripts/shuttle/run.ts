@@ -2,6 +2,7 @@
  * 셔틀 탑승지 레이어 동기화 — stops.ts 의 단지·역을 점으로 쓴다.
  *   node scripts/shuttle/run.ts <projectId> [--dry-run]
  * 좌표는 프로젝트에 이미 있는 같은 이름 도형(원본, derived 아님)에서 복사하거나 VWorld 지오코딩(좌표만 저장 — 불변 규칙 1).
+ * 탑승지마다 캠퍼스(사업장 레이어의 같은 제목 도형)까지 **직선** 노선을 같이 쓴다 — 실제 운행 경로는 공개되지 않아 모식도다.
  * 레이어는 스크립트 소유 — stops.ts 에 없는 도형은 지운다.
  */
 import { createHash } from 'node:crypto'
@@ -58,6 +59,8 @@ for (const g of GROUPS) {
   const existed = findLayer(layers, g.layer)
   const layer = await ensureLayer(sb, projectId, layers, { name: g.layer, color: g.color, visible: true }, `lyr_shuttle_${g.idPrefix}_${projectId.slice(0, 8)}`, dryRun, stopSchema)
   const old = existed ? await readLayerFeatures(sb, existed.id) : []
+  const campus = (await locate({ title: g.campus, feature: g.campus, layerPrefix: 'lyr_site_', source: '' }))
+  if (!campus) throw new Error(`사업장 레이어에 "${g.campus}" 가 없다 — scripts/sites/run.ts 를 먼저 돌려라`)
   const rows: FeatureRow[] = []
   for (const s of g.stops) {
     const point = await locate(s)
@@ -72,6 +75,14 @@ for (const g of GROUPS) {
       id, project_id: projectId, layer_id: layer.id, parent_id: null,
       geometry: { type: 'Point', coordinates: point }, title: s.title, properties,
       blocks: prev?.blocks ?? [], derived_from: null, created_at: prev?.created_at ?? now, updated_at: now,
+    })
+    const lineId = `${id}_line`
+    const prevLine = old.find((f) => f.id === lineId)
+    rows.push({
+      id: lineId, project_id: projectId, layer_id: layer.id, parent_id: null,
+      geometry: { type: 'LineString', coordinates: [point, campus] }, title: `${s.title} → ${g.campus}`,
+      properties: { ...properties, note: ['직선 모식도 — 실제 운행 경로 아님', s.note].filter(Boolean).join('. ') },
+      blocks: prevLine?.blocks ?? [], derived_from: null, created_at: prevLine?.created_at ?? now, updated_at: now,
     })
   }
   const keep = new Set(rows.map((r) => r.id))
