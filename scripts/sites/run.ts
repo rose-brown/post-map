@@ -2,6 +2,7 @@
  * 사업장 레이어 동기화 — sites.ts 의 주소를 VWorld 지오코딩(getcoord, type=road — 실패하면 parcel 로 지번)으로 좌표만 얻어 레이어에 쓴다.
  *   node scripts/sites/run.ts <projectId> [--dry-run]
  * 지오코더 응답에서 저장하는 것은 좌표뿐이다 (불변 규칙 1 — 앱의 검색 결과 point 와 같다). 제목·주소는 sites.ts 의 조사 결과.
+ * 직원 수는 employees.ts (웹 조사) — 있으면 점 크기(sizeField)가 된다. 없으면 키를 두지 않는다.
  * 레이어는 스크립트 소유 — sites.ts 에 없는 도형(사용자가 그린 것 포함)은 지운다.
  */
 import { createHash } from 'node:crypto'
@@ -9,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { ensureLayer, findLayer, readLayerFeatures, readLayers, supabaseClient, upsertFeatures } from '../lead50/sb.ts'
 import type { FeatureRow } from '../../src/db/mappers.ts'
 import type { PropertySchemaField } from '../../src/types.ts'
+import { EMPLOYEES } from './employees.ts'
 import { GROUPS } from './sites.ts'
 import type { Site } from './sites.ts'
 
@@ -16,6 +18,10 @@ const SCHEMA: PropertySchemaField[] = [
   { key: 'company', label: '회사', type: 'text' },
   { key: 'siteType', label: '유형', type: 'text' },
   { key: 'address', label: '주소', type: 'text' },
+  { key: 'employees', label: '직원 수', type: 'number', unit: '명' },
+  { key: 'employeesBasis', label: '직원 수 기준', type: 'text' },
+  { key: 'employeesNote', label: '직원 수 메모', type: 'text' },
+  { key: 'employeesSource', label: '직원 수 출처', type: 'text' },
   { key: 'note', label: '메모', type: 'text' },
   { key: 'source', label: '출처', type: 'text' },
 ]
@@ -46,6 +52,9 @@ process.loadEnvFile(fileURLToPath(new URL('../../.env', import.meta.url)))
 const key = process.env.VWORLD_SEARCH_KEY
 if (!key) throw new Error('.env 에 VWORLD_SEARCH_KEY 가 필요하다')
 const dryRun = process.argv.includes('--dry-run')
+const titles = new Set(GROUPS.flatMap((g) => g.sites.map((s) => s.title)))
+const unknown = Object.keys(EMPLOYEES).filter((t) => !titles.has(t))
+if (unknown.length) throw new Error(`employees.ts 에 sites.ts 에 없는 제목: ${unknown.join(', ')}`)
 const sb = supabaseClient(projectId)
 const layers = await readLayers(sb, projectId)
 const now = new Date().toISOString()
@@ -53,7 +62,7 @@ const failed: string[] = []
 
 for (const g of GROUPS) {
   const existed = findLayer(layers, g.layer)
-  const layer = await ensureLayer(sb, projectId, layers, { name: g.layer, color: g.color, visible: true }, `lyr_site_${g.idPrefix}_${projectId.slice(0, 8)}`, dryRun, siteSchema)
+  const layer = await ensureLayer(sb, projectId, layers, { name: g.layer, color: g.color, visible: true, sizeField: 'employees' }, `lyr_site_${g.idPrefix}_${projectId.slice(0, 8)}`, dryRun, siteSchema)
   const old = existed ? await readLayerFeatures(sb, existed.id) : []
   const rows: FeatureRow[] = []
   for (const s of g.sites) {
@@ -64,6 +73,13 @@ for (const g of GROUPS) {
     const prev = old.find((f) => f.id === id)
     const properties: FeatureRow['properties'] = { company: s.company, siteType: s.siteType, address: s.address, source: s.source, icon: s.siteType === '캠퍼스' || s.siteType === '공장' ? 'factory' : 'building' }
     if (s.note) properties.note = s.note
+    const e = EMPLOYEES[s.title]
+    if (e?.employees != null) {
+      properties.employees = e.employees
+      properties.employeesBasis = `${e.basis} · ${e.asOf}`
+      properties.employeesSource = e.source
+      if (e.note) properties.employeesNote = e.note
+    }
     rows.push({
       id, project_id: projectId, layer_id: layer.id, parent_id: null,
       geometry: { type: 'Point', coordinates: hit.point }, title: s.title, properties,
