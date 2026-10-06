@@ -3,7 +3,9 @@
  *   node scripts/shuttle/run.ts <projectId> [--dry-run]
  * 좌표는 프로젝트에 이미 있는 같은 이름 도형(원본, derived 아님)에서 복사하거나 VWorld 지오코딩(좌표만 저장 — 불변 규칙 1).
  * 노선(stops.ts 의 route)마다 정류장을 차례로 이어 캠퍼스(사업장 레이어의 같은 제목 도형)에서 끝나는 선을 같이 쓴다 (버스 노선도 모양).
- * 실제 운행 경로·정류 순서는 공개되지 않아 모식도다 — 순서는 총길이가 짧게 나오도록 고른다 (chain).
+ * 실제 운행 경로·정류 순서는 공개되지 않아 모식도다 — 순서는 총길이가 짧게 나오도록 고르고 (chain),
+ * 선은 OSRM 공개 서버(router.project-osrm.org, OpenStreetMap 도로)의 자동차 경로다. 데모 서버 정책: 비상업·초당 1건 이하 — 요청 사이 1.1초.
+ * OSM 데이터(ODbL)라 저장할 수 있되 출처를 표기한다. 경로를 못 받으면 그 노선만 직선으로 두고 실패 목록에 적는다.
  * 레이어는 스크립트 소유 — stops.ts 에 없는 도형은 지운다.
  */
 import { createHash } from 'node:crypto'
@@ -18,6 +20,8 @@ import type { Stop } from './stops.ts'
 const SCHEMA: PropertySchemaField[] = [
   { key: 'campus', label: '사업장', type: 'text' },
   { key: 'minutes', label: '셔틀 소요시간', type: 'number', unit: '분' },
+  { key: 'routeKm', label: '노선 길이(OSRM)', type: 'number', unit: 'km' },
+  { key: 'routeMinutes', label: '노선 소요시간(OSRM)', type: 'number', unit: '분' },
   { key: 'note', label: '메모', type: 'text' },
   { key: 'source', label: '출처', type: 'text' },
 ]
@@ -80,6 +84,19 @@ function chain(points: [number, number][], campus: [number, number]): [number, n
   return best
 }
 
+const OSM_CREDIT = '도로 경로 © OpenStreetMap contributors (ODbL), OSRM'
+
+/** 도로 경로. 응답 형식은 OSRM v5 API 문서(route 서비스) 그대로 — distance m, duration 초, geometry GeoJSON LineString. */
+async function road(coords: [number, number][]): Promise<{ line: [number, number][]; km: number; minutes: number } | null> {
+  await new Promise((r) => setTimeout(r, 1100))
+  const res = await fetch(`https://router.project-osrm.org/route/v1/driving/${coords.map((c) => c.join(',')).join(';')}?overview=full&geometries=geojson`)
+  if (!res.ok) return null
+  const r = (await res.json()) as { code: string; routes?: { distance: number; duration: number; geometry: { coordinates: [number, number][] } }[] }
+  const t = r.code === 'Ok' ? r.routes?.[0] : undefined
+  if (!t) return null
+  return { line: t.geometry.coordinates.map(([x, y]) => [trim(x), trim(y)]), km: Math.round(t.distance / 100) / 10, minutes: Math.round(t.duration / 60) }
+}
+
 const now = new Date().toISOString()
 const failed: string[] = []
 for (const g of GROUPS) {
@@ -111,11 +128,21 @@ for (const g of GROUPS) {
     const order = coords.slice(0, -1).map((c) => stops.find((s) => s.point[0] === c[0] && s.point[1] === c[1])!.title)
     const id = `ftr_shuttle_${g.idPrefix}_route_${createHash('sha1').update(route).digest('hex').slice(0, 10)}`
     const prev = old.find((f) => f.id === id)
-    console.log(`노선 ${route}: ${order.join(' → ')} → ${g.campus}`)
+    const r = await road(coords)
+    const routeStops = g.stops.filter((s) => s.route === route)
+    const srcMinutes = routeStops.find((s) => s.minutes !== undefined)?.minutes
+    console.log(`노선 ${route}: ${order.join(' → ')} → ${g.campus} | ${r ? `${r.km}km ${r.minutes}분` : '경로 실패 — 직선'}${srcMinutes !== undefined ? ` (출처 ${srcMinutes}분)` : ''}`)
+    if (!r) failed.push(`${g.layer} ${route} 노선 경로`)
+    const properties: FeatureRow['properties'] = {
+      campus: g.campus,
+      source: [...new Set(routeStops.map((s) => s.source)), ...(r ? [OSM_CREDIT] : [])].join(' '),
+      note: `${r ? '도로 경로는 OSRM 추정' : '직선'} — 실제 운행 경로·순서 아님. ${order.join(' → ')}`,
+    }
+    if (srcMinutes !== undefined) properties.minutes = srcMinutes
+    if (r) { properties.routeKm = r.km; properties.routeMinutes = r.minutes }
     rows.push({
       id, project_id: projectId, layer_id: layer.id, parent_id: null,
-      geometry: { type: 'LineString', coordinates: coords }, title: `${route} 노선 → ${g.campus}`,
-      properties: { campus: g.campus, source: [...new Set(g.stops.filter((s) => s.route === route).map((s) => s.source))].join(' '), note: `모식도 — 실제 운행 경로·순서 아님. ${order.join(' → ')}` },
+      geometry: { type: 'LineString', coordinates: r?.line ?? coords }, title: `${route} 노선 → ${g.campus}`, properties,
       blocks: prev?.blocks ?? [], derived_from: null, created_at: prev?.created_at ?? now, updated_at: now,
     })
   }
@@ -126,5 +153,5 @@ for (const g of GROUPS) {
   await upsertFeatures(sb, rows)
   for (const f of stale) await sb(`features?id=eq.${f.id}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
 }
-if (failed.length) console.error(`좌표 실패 ${failed.length}: ${failed.join(', ')}`)
+if (failed.length) console.error(`실패 ${failed.length}: ${failed.join(', ')}`)
 console.error(dryRun ? 'dry-run — 쓰지 않았다' : '기록 완료')
